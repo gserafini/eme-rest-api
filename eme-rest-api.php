@@ -3,7 +3,7 @@
  * Plugin Name: Events Made Easy REST API
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.6.3
+ * Version: 1.6.4
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -417,26 +417,26 @@ function eme_rest_update_event($request) {
 function eme_rest_delete_event($request) {
     $event_id = intval($request['id']);
 
-    // Check if event exists
+    // Check if event exists before deletion
     $event = eme_get_event($event_id);
     if (!$event) {
         return new WP_Error('not_found', 'Event not found', ['status' => 404]);
     }
 
-    // Attempt to delete event
-    $result = eme_db_delete_event($event_id);
+    // Delete event (eme_db_delete_event returns void/null, not success/failure)
+    eme_db_delete_event($event_id);
 
-    // If return value is ambiguous (falsy but might have succeeded), verify actual deletion
-    if (!$result) {
-        // Re-query to check if event was actually deleted
-        $check = eme_get_event($event_id);
-        if ($check) {
-            // Event still exists, deletion truly failed
-            return new WP_Error('deletion_failed', 'Failed to delete event', ['status' => 500]);
-        }
-        // Event is gone, deletion succeeded despite falsy return value
+    // Clear WordPress object cache for this event to ensure fresh DB query
+    wp_cache_delete("eme_event $event_id");
+
+    // Verify deletion by querying database (cache is cleared, so this hits DB)
+    $check = eme_get_event($event_id);
+    if ($check) {
+        // Event still exists in database, deletion failed
+        return new WP_Error('deletion_failed', 'Failed to delete event', ['status' => 500]);
     }
 
+    // Event successfully deleted
     return rest_ensure_response([
         'success' => true,
         'message' => 'Event deleted successfully',

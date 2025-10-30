@@ -1,4 +1,5 @@
 === Events Made Easy REST API ===
+
 Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
 Requires at least: 5.0
@@ -34,17 +35,32 @@ Events Made Easy (EME) uses custom database tables instead of WordPress custom p
 
 == Installation ==
 
-### Multisite Notes
+**Method 1: Manual Upload**
+
+1. Download or clone this repository
+2. Upload the `eme-rest-api` folder to `/wp-content/plugins/`
+3. Activate the plugin through the 'Plugins' menu in WordPress
+4. Ensure Events Made Easy is installed and activated
+
+**Method 2: ZIP Upload**
+
+1. Create a ZIP file of the `eme-rest-api` folder
+2. In WordPress admin, go to Plugins → Add New → Upload Plugin
+3. Choose the ZIP file and click "Install Now"
+4. Activate the plugin
+
+**Multisite Notes:**
 
 The plugin works seamlessly with WordPress Multisite:
 
-- **Network Activate:** Activates for all sites in the network
-- **Per-Site Activate:** Can be activated individually per site
-- **Table Prefixes:** Automatically handles site-specific table prefixes
-- **REST API:** Each site has its own `/wp-json/eme/v1/` endpoints
-- **Credentials:** Use application passwords from each site's admin
+* **Network Activate:** Activates for all sites in the network
+* **Per-Site Activate:** Can be activated individually per site
+* **Table Prefixes:** Automatically handles site-specific table prefixes
+* **REST API:** Each site has its own `/wp-json/eme/v1/` endpoints
+* **Credentials:** Use application passwords from each site's admin
 
-**Example multisite usage:**
+Example multisite usage:
+
 ```bash
 # Site 1
 curl https://site1.example.com/wp-json/eme/v1/eme_events \
@@ -55,23 +71,7 @@ curl https://site2.example.com/wp-json/eme/v1/eme_events \
   -u "site2admin:site2_app_password"
 ```
 
-## Installation
-
-### Method 1: Manual Upload
-
-1. Download or clone this repository
-2. Upload the `eme-rest-api` folder to `/wp-content/plugins/`
-3. Activate the plugin through the 'Plugins' menu in WordPress
-4. Ensure Events Made Easy is installed and activated
-
-### Method 2: ZIP Upload
-
-1. Create a ZIP file of the `eme-rest-api` folder
-2. In WordPress admin, go to Plugins → Add New → Upload Plugin
-3. Choose the ZIP file and click "Install Now"
-4. Activate the plugin
-
-## API Endpoints
+== API Endpoints ==
 
 Base URL: `https://yoursite.com/wp-json/eme/v1`
 
@@ -80,31 +80,37 @@ Base URL: `https://yoursite.com/wp-json/eme/v1`
 ### Events
 
 #### List Events
+
 ```http
 GET /eme/v1/eme_events
 ```
 
 Query parameters:
-- `per_page` (int): Events per page (default: 10)
-- `page` (int): Page number (default: 1)
-- `scope` (string): Event scope - `future`, `past`, `all` (default: `future`)
+
+* `per_page` (int): Events per page (default: 10)
+* `page` (int): Page number (default: 1)
+* `scope` (string): Event scope - `future`, `past`, `all` (default: `future`)
 
 Example:
+
 ```bash
 curl https://yoursite.com/wp-json/eme/v1/eme_events?per_page=5&scope=future
 ```
 
 #### Get Single Event
+
 ```http
 GET /eme/v1/eme_events/{id}
 ```
 
 Example:
+
 ```bash
 curl https://yoursite.com/wp-json/eme/v1/eme_events/123
 ```
 
 #### Create Event
+
 ```http
 POST /eme/v1/eme_events
 ```
@@ -112,6 +118,7 @@ POST /eme/v1/eme_events
 Required authentication: Yes (application password or OAuth)
 
 Request body:
+
 ```json
 {
   "title": "Annual Meeting",
@@ -124,6 +131,8 @@ Request body:
   "rsvp": true,
   "seats": 100,
   "price": "25.00",
+
+
   "currency": "USD",
   "image_id": 456,
   "url": "https://example.com/event-info"
@@ -131,24 +140,27 @@ Request body:
 ```
 
 Required fields:
-- `title` (string)
-- `start_date` (datetime: `YYYY-MM-DD HH:MM:SS`)
+
+* `title` (string)
+* `start_date` (datetime: `YYYY-MM-DD HH:MM:SS`)
 
 Optional fields:
-- `description` (string)
-- `end_date` (datetime, defaults to start_date)
-- `status` (string: `published` or `draft`, default: `published`)
-- `location_id` (int)
-- `category_ids` (array of ints or comma-separated string)
-- `rsvp` (boolean)
-- `seats` (int)
-- `price` (string)
-- `currency` (string)
-- `image_id` (int - WordPress media library attachment ID)
-- `contact_person_id` (int)
-- `url` (string)
+
+* `description` (string)
+* `end_date` (datetime, defaults to start_date)
+* `status` (string: `published` or `draft`, default: `published`)
+* `location_id` (int)
+* `category_ids` (array of ints or comma-separated string)
+* `rsvp` (boolean)
+* `seats` (int)
+* `price` (string)
+* `currency` (string)
+* `image_id` (int - WordPress media library attachment ID)
+* `contact_person_id` (int)
+* `url` (string)
 
 Example:
+
 ```bash
 curl -X POST https://yoursite.com/wp-json/eme/v1/eme_events \
   -u "username:application_password" \
@@ -163,6 +175,7 @@ curl -X POST https://yoursite.com/wp-json/eme/v1/eme_events \
 ```
 
 Response:
+
 ```json
 {
   "success": true,
@@ -202,6 +215,7 @@ Response:
 ```
 
 #### Update Event
+
 ```http
 PUT /eme/v1/eme_events/{id}
 ```
@@ -211,6 +225,7 @@ Required authentication: Yes
 Request body: Same as create, all fields optional
 
 Example:
+
 ```bash
 curl -X PUT https://yoursite.com/wp-json/eme/v1/eme_events/123 \
   -u "username:application_password" \
@@ -222,6 +237,7 @@ curl -X PUT https://yoursite.com/wp-json/eme/v1/eme_events/123 \
 ```
 
 #### Delete Event
+
 ```http
 DELETE /eme/v1/eme_events/{id}
 ```
@@ -229,6 +245,7 @@ DELETE /eme/v1/eme_events/{id}
 Required authentication: Yes
 
 Example:
+
 ```bash
 curl -X DELETE https://yoursite.com/wp-json/eme/v1/eme_events/123 \
   -u "username:application_password"
@@ -237,26 +254,31 @@ curl -X DELETE https://yoursite.com/wp-json/eme/v1/eme_events/123 \
 ### Locations
 
 #### List Locations
+
 ```http
 GET /eme/v1/eme_locations
 ```
 
 Example:
+
 ```bash
 curl https://yoursite.com/wp-json/eme/v1/eme_locations
 ```
 
 #### Get Single Location
+
 ```http
 GET /eme/v1/eme_locations/{id}
 ```
 
 Example:
+
 ```bash
 curl https://yoursite.com/wp-json/eme/v1/eme_locations/5
 ```
 
 #### Create Location
+
 ```http
 POST /eme/v1/eme_locations
 ```
@@ -264,9 +286,12 @@ POST /eme/v1/eme_locations
 Required authentication: Yes
 
 Request body:
+
 ```json
 {
   "name": "Third Church of Christ, Scientist",
+
+
   "address": "11914 Rustic Lane",
   "city": "San Antonio",
   "state": "Texas",
@@ -276,16 +301,19 @@ Request body:
 ```
 
 Required fields:
-- `name` (string)
+
+* `name` (string)
 
 Optional fields:
-- `address` (string)
-- `city` (string)
-- `state` (string)
-- `zip` (string)
-- `country` (string)
+
+* `address` (string)
+* `city` (string)
+* `state` (string)
+* `zip` (string)
+* `country` (string)
 
 Example:
+
 ```bash
 curl -X POST https://yoursite.com/wp-json/eme/v1/eme_locations \
   -u "username:application_password" \
@@ -302,16 +330,19 @@ curl -X POST https://yoursite.com/wp-json/eme/v1/eme_locations \
 ### Categories
 
 #### List Categories
+
 ```http
 GET /eme/v1/eme_categories
 ```
 
 Example:
+
 ```bash
 curl https://yoursite.com/wp-json/eme/v1/eme_categories
 ```
 
 #### Create Category
+
 ```http
 POST /eme/v1/eme_categories
 ```
@@ -319,6 +350,7 @@ POST /eme/v1/eme_categories
 Required authentication: Yes
 
 Request body:
+
 ```json
 {
   "name": "Mobile Reading Room",
@@ -327,12 +359,15 @@ Request body:
 ```
 
 Required fields:
-- `name` (string)
+
+* `name` (string)
 
 Optional fields:
-- `slug` (string, auto-generated from name if not provided)
+
+* `slug` (string, auto-generated from name if not provided)
 
 Example:
+
 ```bash
 curl -X POST https://yoursite.com/wp-json/eme/v1/eme_categories \
   -u "username:application_password" \
@@ -347,6 +382,7 @@ curl -X POST https://yoursite.com/wp-json/eme/v1/eme_categories \
 Create recurring events with flexible patterns.
 
 #### Create Recurring Event
+
 ```http
 POST /eme/v1/eme_recurrences
 ```
@@ -354,6 +390,7 @@ POST /eme/v1/eme_recurrences
 Required authentication: Yes
 
 **Weekly Recurrence Example:**
+
 ```bash
 curl -X POST https://yoursite.com/wp-json/eme/v1/eme_recurrences \
   -u "username:application_password" \
@@ -374,6 +411,7 @@ curl -X POST https://yoursite.com/wp-json/eme/v1/eme_recurrences \
 ```
 
 **Monthly Recurrence Example (2nd Tuesday of every month):**
+
 ```bash
 curl -X POST https://yoursite.com/wp-json/eme/v1/eme_recurrences \
   -u "username:application_password" \
@@ -395,6 +433,7 @@ curl -X POST https://yoursite.com/wp-json/eme/v1/eme_recurrences \
 ```
 
 **Specific Dates Example:**
+
 ```bash
 curl -X POST https://yoursite.com/wp-json/eme/v1/eme_recurrences \
   -u "username:application_password" \
@@ -413,35 +452,44 @@ curl -X POST https://yoursite.com/wp-json/eme/v1/eme_recurrences \
 **Recurrence Parameters:**
 
 Required fields:
-- `title` (string) - Event title
-- `recurrence` (object) - Recurrence pattern
+
+* `title` (string) - Event title
+
+* `recurrence` (object) - Recurrence pattern
 
 Recurrence pattern fields:
 
 For **weekly**:
-- `frequency`: "weekly"
-- `start_date`: Start date (YYYY-MM-DD)
-- `end_date`: End date (YYYY-MM-DD)
-- `days_of_week`: Array of day names ["monday", "tuesday", ...]
-- `interval`: Number of weeks between occurrences (default: 1)
-- `duration`: Duration in seconds (default: 3600)
-- `exclude_days`: Optional array of dates to skip
+
+* `frequency`: "weekly"
+
+* `start_date`: Start date (YYYY-MM-DD)
+* `end_date`: End date (YYYY-MM-DD)
+* `days_of_week`: Array of day names ["monday", "tuesday", ...]
+* `interval`: Number of weeks between occurrences (default: 1)
+* `duration`: Duration in seconds (default: 3600)
+* `exclude_days`: Optional array of dates to skip
 
 For **monthly**:
-- `frequency`: "monthly"
-- `start_date`: Start date
-- `end_date`: End date
-- `week_of_month`: Week number (1-5, or -1 for last week)
-- `day_of_week`: Day name ("monday", "tuesday", etc.)
-- `interval`: Number of months between occurrences (default: 1)
-- `duration`: Duration in seconds
+
+* `frequency`: "monthly"
+
+* `start_date`: Start date
+* `end_date`: End date
+* `week_of_month`: Week number (1-5, or -1 for last week)
+* `day_of_week`: Day name ("monday", "tuesday", etc.)
+* `interval`: Number of months between occurrences (default: 1)
+* `duration`: Duration in seconds
 
 For **specific**:
-- `frequency`: "specific"
-- `dates`: Array of specific dates ["2025-11-01", "2025-11-15", ...]
-- `duration`: Duration in seconds
+
+* `frequency`: "specific"
+
+* `dates`: Array of specific dates ["2025-11-01", "2025-11-15", ...]
+* `duration`: Duration in seconds
 
 Response:
+
 ```json
 {
   "success": true,
@@ -461,16 +509,19 @@ Response:
 ```
 
 #### Get Recurrence Pattern
+
 ```http
 GET /eme/v1/eme_recurrences/{id}
 ```
 
 Example:
+
 ```bash
 curl https://yoursite.com/wp-json/eme/v1/eme_recurrences/45
 ```
 
 #### Get Recurrence Instances
+
 Calculate all event instances for a recurrence pattern:
 
 ```http
@@ -478,15 +529,19 @@ GET /eme/v1/eme_recurrences/{id}/instances
 ```
 
 Query parameters:
-- `start_date` (optional): Start of date range (default: today)
-- `end_date` (optional): End of date range (default: +1 year)
+
+* `start_date` (optional): Start of date range (default: today)
+
+* `end_date` (optional): End of date range (default: +1 year)
 
 Example:
+
 ```bash
 curl "https://yoursite.com/wp-json/eme/v1/eme_recurrences/45/instances?start_date=2025-11-01&end_date=2025-11-30"
 ```
 
 Response:
+
 ```json
 {
   "recurrence_id": 45,
@@ -509,6 +564,7 @@ Response:
 ```
 
 #### Delete Recurrence
+
 ```http
 DELETE /eme/v1/eme_recurrences/{id}
 ```
@@ -518,6 +574,7 @@ Required authentication: Yes
 **Warning:** This deletes the recurrence pattern AND all associated events.
 
 Example:
+
 ```bash
 curl -X DELETE https://yoursite.com/wp-json/eme/v1/eme_recurrences/45 \
   -u "username:application_password"
@@ -547,22 +604,23 @@ Any authentication method that sets `current_user_can('edit_posts')` will work.
 
 ## Permissions
 
-- **Read operations** (GET): Public (no authentication required)
-  - Can be restricted by modifying `eme_rest_read_permission()` function
-- **Write operations** (POST, PUT, DELETE): Requires `edit_posts` capability
+* **Read operations** (GET): Public (no authentication required)
+  * Can be restricted by modifying `eme_rest_read_permission()` function
+* **Write operations** (POST, PUT, DELETE): Requires `edit_posts` capability
 
 ## Error Responses
 
 The API returns standard HTTP status codes:
 
-- `200` - Success
-- `400` - Bad request (missing required fields)
-- `401` - Unauthorized (authentication required)
-- `403` - Forbidden (insufficient permissions)
-- `404` - Not found
-- `500` - Server error
+* `200` - Success
+* `400` - Bad request (missing required fields)
+* `401` - Unauthorized (authentication required)
+* `403` - Forbidden (insufficient permissions)
+* `404` - Not found
+* `500` - Server error
 
 Error response format:
+
 ```json
 {
   "code": "missing_title",
@@ -578,6 +636,7 @@ Error response format:
 ### Complete Workflow: Create Event with New Location
 
 1. Create location:
+
 ```bash
 LOCATION_RESPONSE=$(curl -s -X POST https://yoursite.com/wp-json/eme/v1/eme_locations \
   -u "username:app_password" \
@@ -594,6 +653,7 @@ LOCATION_ID=$(echo $LOCATION_RESPONSE | jq -r '.location_id')
 ```
 
 2. Create event with location:
+
 ```bash
 curl -X POST https://yoursite.com/wp-json/eme/v1/eme_events \
   -u "username:app_password" \
@@ -668,7 +728,7 @@ fetch(apiUrl, {
 
 ### File Structure
 
-```
+```text
 eme-rest-api/
 ├── eme-rest-api.php    # Main plugin file
 └── README.md           # This file
@@ -678,10 +738,10 @@ eme-rest-api/
 
 This plugin was created to enable REST API access to Events Made Easy. Feel free to:
 
-- Report issues
-- Submit pull requests
-- Suggest features
-- Share improvements
+* Report issues
+* Submit pull requests
+* Suggest features
+* Share improvements
 
 ### Testing
 
@@ -703,9 +763,10 @@ curl -X POST https://yoursite.com/wp-json/eme/v1/eme_events \
 ```
 
 Or use a REST API client like:
-- Postman
-- Insomnia
-- Thunder Client (VS Code extension)
+
+* Postman
+* Insomnia
+* Thunder Client (VS Code extension)
 
 ## License
 
@@ -714,31 +775,34 @@ GPL v2 or later
 ## Support
 
 For issues related to:
-- **This plugin**: Open an issue in the repository
-- **Events Made Easy**: Visit [EME support](https://www.e-dynamics.be/wordpress/)
+
+* **This plugin**: Open an issue in the repository
+* **Events Made Easy**: Visit [EME support](https://www.e-dynamics.be/wordpress/)
 
 ## Changelog
 
 ### 1.1.0 - 2025-10-29
-- **NEW:** Recurring events support
-  - Weekly recurrence patterns
-  - Monthly recurrence patterns (by week/day of month)
-  - Specific dates recurrence
-  - Exclude days feature
-  - Calculate instances endpoint
-  - Full CRUD for recurrence patterns
-- **NEW:** WordPress Multisite support
-  - Network activation capability (`Network: true` header)
-  - Automatic site-specific table prefix handling
-  - Per-site REST API endpoints
-  - Site-isolated data and credentials
-  - Comprehensive multisite documentation
-- Validation for recurrence patterns
-- Comprehensive recurrence documentation
+
+* **NEW:** Recurring events support
+  * Weekly recurrence patterns
+  * Monthly recurrence patterns (by week/day of month)
+  * Specific dates recurrence
+  * Exclude days feature
+  * Calculate instances endpoint
+  * Full CRUD for recurrence patterns
+* **NEW:** WordPress Multisite support
+  * Network activation capability (`Network: true` header)
+  * Automatic site-specific table prefix handling
+  * Per-site REST API endpoints
+  * Site-isolated data and credentials
+  * Comprehensive multisite documentation
+* Validation for recurrence patterns
+* Comprehensive recurrence documentation
 
 ### 1.0.0 - 2025-10-29
-- Initial release
-- Event CRUD operations
-- Location management
-- Category management
-- WordPress authentication integration
+
+* Initial release
+* Event CRUD operations
+* Location management
+* Category management
+* WordPress authentication integration

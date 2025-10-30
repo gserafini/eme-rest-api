@@ -1,0 +1,41 @@
+# WordPress
+*.log
+wp-config.php
+wp-content/advanced-cache.php
+wp-content/backup-db/
+wp-content/backups/
+wp-content/blogs.dir/
+wp-content/cache/
+wp-content/upgrade/
+wp-content/uploads/
+wp-content/mu-plugins/
+wp-content/wp-cache-config.php
+wp-content/plugins/hello.php
+
+# Development
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.phpunit.result.cache
+
+# Backups
+*.bak
+*.backup
+*.old
+
+# Package managers
+node_modules/
+vendor/
+composer.lock
+package-lock.json
+
+# ZIP files (except releases)
+*.zip
+
+# Temporary files
+tmp/
+temp/
+.cache/

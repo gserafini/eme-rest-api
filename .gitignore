@@ -26,6 +26,9 @@ wp-content/plugins/hello.php
 *.backup
 *.old
 
+# Internal documentation (kept in docs/ folder)
+/docs/
+
 # Package managers
 node_modules/
 vendor/

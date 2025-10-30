@@ -7,10 +7,19 @@ cd "$SCRIPT_DIR"
 # Remove old ZIP if exists
 rm -f eme-rest-api.zip
 
-# Create ZIP with plugin files
-zip -r eme-rest-api.zip . -x "*.git*" "*.DS_Store" "create-zip.sh" "*.zip"
+# Create ZIP with only essential plugin files
+zip -r eme-rest-api.zip \
+  eme-rest-api.php \
+  readme.txt \
+  README.md \
+  -x "*.git*" "*.DS_Store"
 
 echo "✓ Created eme-rest-api.zip"
+echo ""
+echo "Included files:"
+echo "  - eme-rest-api.php (main plugin)"
+echo "  - readme.txt (WordPress.org format)"
+echo "  - README.md (GitHub documentation)"
 echo ""
 echo "Installation instructions:"
 echo "1. Upload eme-rest-api.zip to WordPress"

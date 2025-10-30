@@ -3,7 +3,7 @@ Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
 Requires at least: 5.0
 Tested up to: 6.8
-Stable tag: 1.6.4
+Stable tag: 1.6.5
 Requires PHP: 7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -109,6 +109,10 @@ Events Made Easy version 2.0 or higher is recommended. The plugin uses EME's bui
 Screenshots coming soon.
 
 == Changelog ==
+
+= 1.6.5 - 2025-10-30 =
+* Added GitHub Plugin URI header for Git Updater support
+* Enables automatic updates from GitHub releases
 
 = 1.6.4 - 2025-10-30 =
 * Fixed DELETE endpoint to properly handle eme_db_delete_event void return

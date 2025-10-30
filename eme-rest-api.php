@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Events Made Easy REST API
- * Plugin URI: https://github.com/yourusername/eme-rest-api
+ * Plugin URI: https://github.com/gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
  * Version: 1.6.2
  * Author: Gabriel Serafini

@@ -3,7 +3,7 @@
  * Plugin Name: Events Made Easy REST API
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.6.2
+ * Version: 1.6.3
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -423,11 +423,18 @@ function eme_rest_delete_event($request) {
         return new WP_Error('not_found', 'Event not found', ['status' => 404]);
     }
 
-    // Delete event
-    $success = eme_db_delete_event($event_id);
+    // Attempt to delete event
+    $result = eme_db_delete_event($event_id);
 
-    if (!$success) {
-        return new WP_Error('deletion_failed', 'Failed to delete event', ['status' => 500]);
+    // If return value is ambiguous (falsy but might have succeeded), verify actual deletion
+    if (!$result) {
+        // Re-query to check if event was actually deleted
+        $check = eme_get_event($event_id);
+        if ($check) {
+            // Event still exists, deletion truly failed
+            return new WP_Error('deletion_failed', 'Failed to delete event', ['status' => 500]);
+        }
+        // Event is gone, deletion succeeded despite falsy return value
     }
 
     return rest_ensure_response([

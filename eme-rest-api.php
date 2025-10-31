@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.6.5
+ * Version: 1.7.1
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -19,17 +19,11 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Check if Events Made Easy is active
+// Silently check if Events Made Easy is active
+// If not active, plugin does nothing (safe for network activation)
 function eme_rest_api_check_dependencies() {
-    if (!function_exists('eme_new_event')) {
-        add_action('admin_notices', function() {
-            echo '<div class="error"><p><strong>EME REST API:</strong> Events Made Easy plugin must be installed and activated.</p></div>';
-        });
-        return false;
-    }
-    return true;
+    return function_exists('eme_new_event');
 }
-add_action('plugins_loaded', 'eme_rest_api_check_dependencies');
 
 // Plugin activation hook - flush permalinks to register new routes
 function eme_rest_api_activate() {
@@ -104,9 +98,16 @@ add_action('rest_api_init', function() {
     ]);
 
     register_rest_route($namespace, '/eme_locations/(?P<id>\d+)', [
-        'methods' => 'GET',
-        'callback' => 'eme_rest_get_location',
-        'permission_callback' => 'eme_rest_read_permission',
+        [
+            'methods' => 'GET',
+            'callback' => 'eme_rest_get_location',
+            'permission_callback' => 'eme_rest_read_permission',
+        ],
+        [
+            'methods' => ['POST', 'PUT', 'PATCH'],
+            'callback' => 'eme_rest_update_location',
+            'permission_callback' => 'eme_rest_write_permission',
+        ],
     ]);
 
     // Category endpoints (renamed to /eme_categories to avoid conflict with EME custom post types)
@@ -161,6 +162,61 @@ function eme_rest_read_permission() {
 function eme_rest_write_permission() {
     // Require authentication and edit_posts capability
     return current_user_can('edit_posts');
+}
+
+// Geocoding function using OpenStreetMap Nominatim (same as EME frontend)
+function eme_rest_geocode_location($location) {
+    // Build search query from location components
+    $address_parts = array_filter([
+        isset($location['location_address1']) ? $location['location_address1'] : '',
+        isset($location['location_address2']) ? $location['location_address2'] : '',
+        isset($location['location_city']) ? $location['location_city'] : '',
+        isset($location['location_state']) ? $location['location_state'] : '',
+        isset($location['location_zip']) ? $location['location_zip'] : '',
+        isset($location['location_country']) ? $location['location_country'] : '',
+    ]);
+
+    if (empty($address_parts)) {
+        return false; // No address to geocode
+    }
+
+    $search_query = implode(', ', $address_parts);
+
+    // Use OpenStreetMap Nominatim API (same as EME uses)
+    $geocode_url = 'https://nominatim.openstreetmap.org/search';
+    $params = [
+        'format' => 'json',
+        'limit' => 1,
+        'q' => $search_query,
+    ];
+
+    $url = $geocode_url . '?' . http_build_query($params);
+
+    // Set user agent as required by Nominatim usage policy
+    $args = [
+        'headers' => [
+            'User-Agent' => 'EME-REST-API/1.6.7 WordPress/' . get_bloginfo('version'),
+        ],
+        'timeout' => 10,
+    ];
+
+    $response = wp_remote_get($url, $args);
+
+    if (is_wp_error($response)) {
+        return false;
+    }
+
+    $body = wp_remote_retrieve_body($response);
+    $data = json_decode($body, true);
+
+    if (!empty($data) && isset($data[0]['lat']) && isset($data[0]['lon'])) {
+        return [
+            'latitude' => $data[0]['lat'],
+            'longitude' => $data[0]['lon'],
+        ];
+    }
+
+    return false;
 }
 
 // Helper function to map status strings to EME status codes
@@ -558,6 +614,15 @@ function eme_rest_create_location($request) {
     $location['location_latitude'] = isset($params['latitude']) ? strval($params['latitude']) : '';
     $location['location_longitude'] = isset($params['longitude']) ? strval($params['longitude']) : '';
 
+    // Auto-geocode if coordinates not provided but address is
+    if (empty($location['location_latitude']) && empty($location['location_longitude'])) {
+        $coords = eme_rest_geocode_location($location);
+        if ($coords) {
+            $location['location_latitude'] = strval($coords['latitude']);
+            $location['location_longitude'] = strval($coords['longitude']);
+        }
+    }
+
     if (isset($params['description'])) {
         $location['location_description'] = wp_kses_post($params['description']);
     }
@@ -582,6 +647,81 @@ function eme_rest_create_location($request) {
         'location_id' => $location_id,
         'location' => eme_rest_format_location($created_location),
         'message' => 'Location created successfully',
+    ]);
+}
+
+function eme_rest_update_location($request) {
+    $location_id = intval($request['id']);
+    $params = $request->get_json_params();
+
+    // Get existing location using EME's built-in function
+    $location = eme_get_location($location_id);
+
+    if (!$location) {
+        return new WP_Error('not_found', 'Location not found', ['status' => 404]);
+    }
+
+    // Update location fields with provided parameters
+    if (isset($params['name'])) {
+        $location['location_name'] = sanitize_text_field($params['name']);
+    }
+    if (isset($params['address'])) {
+        $location['location_address1'] = sanitize_text_field($params['address']);
+    }
+    if (isset($params['address2'])) {
+        $location['location_address2'] = sanitize_text_field($params['address2']);
+    }
+    if (isset($params['city'])) {
+        $location['location_city'] = sanitize_text_field($params['city']);
+    }
+    if (isset($params['state'])) {
+        $location['location_state'] = sanitize_text_field($params['state']);
+    }
+    if (isset($params['zip'])) {
+        $location['location_zip'] = sanitize_text_field($params['zip']);
+    }
+    if (isset($params['country'])) {
+        $location['location_country'] = sanitize_text_field($params['country']);
+    }
+    if (isset($params['latitude'])) {
+        $location['location_latitude'] = strval($params['latitude']);
+    }
+    if (isset($params['longitude'])) {
+        $location['location_longitude'] = strval($params['longitude']);
+    }
+    if (isset($params['description'])) {
+        $location['location_description'] = wp_kses_post($params['description']);
+    }
+
+    // Auto-geocode if address fields were updated but coordinates weren't provided
+    $address_fields_updated = isset($params['address']) || isset($params['address2']) ||
+                             isset($params['city']) || isset($params['state']) ||
+                             isset($params['zip']) || isset($params['country']);
+    $coords_provided = isset($params['latitude']) || isset($params['longitude']);
+
+    if ($address_fields_updated && !$coords_provided) {
+        $coords = eme_rest_geocode_location($location);
+        if ($coords) {
+            $location['location_latitude'] = strval($coords['latitude']);
+            $location['location_longitude'] = strval($coords['longitude']);
+        }
+    }
+
+    // Update location using EME's built-in function
+    // Note: eme_update_location may return location_id on success, 0/false on failure
+    $result = eme_update_location($location, $location_id);
+
+    // Get updated location (regardless of return value, as EME functions vary)
+    $updated_location = eme_get_location($location_id);
+
+    if (!$updated_location) {
+        return new WP_Error('update_failed', 'Failed to update location', ['status' => 500]);
+    }
+
+    return rest_ensure_response([
+        'success' => true,
+        'location' => eme_rest_format_location($updated_location),
+        'message' => 'Location updated successfully',
     ]);
 }
 
@@ -678,14 +818,28 @@ function eme_rest_format_event($event) {
 }
 
 function eme_rest_format_location($location) {
+    // EME stores address in location_address1 and location_address2
+    // but may also have a computed location_address field
+    $address = '';
+    if (isset($location['location_address']) && !empty($location['location_address'])) {
+        $address = $location['location_address'];
+    } elseif (isset($location['location_address1'])) {
+        $address = trim($location['location_address1']);
+        if (isset($location['location_address2']) && !empty($location['location_address2'])) {
+            $address .= ($address ? ' ' : '') . trim($location['location_address2']);
+        }
+    }
+
     return [
         'id' => intval($location['location_id']),
         'name' => $location['location_name'],
-        'address' => $location['location_address'],
+        'address' => $address,
         'city' => $location['location_city'],
         'state' => $location['location_state'],
         'zip' => $location['location_zip'],
         'country' => $location['location_country'],
+        'latitude' => isset($location['location_latitude']) ? $location['location_latitude'] : '',
+        'longitude' => isset($location['location_longitude']) ? $location['location_longitude'] : '',
     ];
 }
 

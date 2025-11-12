@@ -88,12 +88,26 @@ Query parameters:
 
 * `per_page` (int): Events per page (default: 10)
 * `page` (int): Page number (default: 1)
-* `scope` (string): Event scope - `future`, `past`, `all` (default: `future`)
+* `scope` (string): Event scope - `future`, `past`, `today`, `month`, etc. (default: `future`)
+* `start_date` (string): Filter events starting from this date (YYYY-MM-DD)
+* `end_date` (string): Filter events ending before this date (YYYY-MM-DD)
 
-Example:
+**Note:** If `start_date` or `end_date` are provided, they take precedence over `scope`.
+
+Examples:
 
 ```bash
+# Get future events
 curl https://yoursite.com/wp-json/eme/v1/eme_events?per_page=5&scope=future
+
+# Get events in a specific date range
+curl https://yoursite.com/wp-json/eme/v1/eme_events?start_date=2025-11-01&end_date=2025-11-30
+
+# Get all events from a start date onwards
+curl https://yoursite.com/wp-json/eme/v1/eme_events?start_date=2025-11-01
+
+# Get all events before an end date
+curl https://yoursite.com/wp-json/eme/v1/eme_events?end_date=2025-12-31
 ```
 
 #### Get Single Event
@@ -238,6 +252,25 @@ Request body:
 
 ### Recurring Events
 
+#### List Recurring Events
+
+```http
+GET /eme/v1/eme_recurrences
+```
+
+Returns all recurring event templates (parent events that have recurring instances).
+
+Example:
+
+```bash
+curl https://yoursite.com/wp-json/eme/v1/eme_recurrences
+```
+
+**Response:** Array of event objects that are recurring templates. Each event will have:
+
+* `recurrence_id`: `0` (these are the parent templates)
+* Child events reference these via their `recurrence_id` field
+
 #### Create Recurring Event
 
 ```http
@@ -338,6 +371,19 @@ Contributions are welcome! Please feel free to:
 * **Events Made Easy:** [EME GitHub](https://github.com/liedekef/events-made-easy)
 
 ## Changelog
+
+### v1.8.0 - 2025-11-12
+
+* **NEW:** Date range query parameters for events endpoint
+  * Added `start_date` and `end_date` parameters to `GET /eme_events`
+  * Supports filtering events by date range (YYYY-MM-DD format)
+  * Date parameters take precedence over `scope` parameter
+* **NEW:** List recurring events endpoint
+  * Added `GET /eme_recurrences` to list all recurring event templates
+  * Returns parent events that have recurring instances
+* **FIXED:** Events API now properly returns all events including recurring instances
+  * Previously only returned limited results due to parameter handling
+  * Now correctly passes date range to EME's query functions
 
 ### v1.6.2 - 2025-10-30
 

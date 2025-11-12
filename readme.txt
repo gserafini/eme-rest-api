@@ -3,7 +3,7 @@ Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
 Requires at least: 5.0
 Tested up to: 6.8
-Stable tag: 1.6.5
+Stable tag: 1.8.0
 Requires PHP: 7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -109,6 +109,12 @@ Events Made Easy version 2.0 or higher is recommended. The plugin uses EME's bui
 Screenshots coming soon.
 
 == Changelog ==
+
+= 1.8.0 - 2025-11-12 =
+* **NEW:** Date range query parameters for events endpoint
+* Added `start_date` and `end_date` parameters to `GET /eme_events`
+* **NEW:** List recurring events endpoint `GET /eme_recurrences`
+* **FIXED:** Events API now properly returns all events including recurring instances
 
 = 1.6.5 - 2025-10-30 =
 * Added GitHub Plugin URI header for Git Updater support

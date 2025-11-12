@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.7.1
+ * Version: 1.8.0
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -126,6 +126,11 @@ add_action('rest_api_init', function() {
 
     // Recurrence endpoints (renamed to /eme_recurrences to avoid conflict with EME custom post types)
     register_rest_route($namespace, '/eme_recurrences', [
+        [
+            'methods' => 'GET',
+            'callback' => 'eme_rest_get_recurrences',
+            'permission_callback' => 'eme_rest_read_permission',
+        ],
         [
             'methods' => 'POST',
             'callback' => 'eme_rest_create_recurrence',
@@ -264,7 +269,16 @@ function eme_rest_get_events($request) {
     // Default parameters
     $limit = isset($params['per_page']) ? intval($params['per_page']) : 10;
     $offset = isset($params['page']) ? (intval($params['page']) - 1) * $limit : 0;
-    $scope = isset($params['scope']) ? sanitize_text_field($params['scope']) : 'future';
+
+    // Handle date range parameters (start_date, end_date)
+    // EME's eme_get_events() accepts scope as "YYYY-MM-DD,YYYY-MM-DD" for date ranges
+    if (isset($params['start_date']) || isset($params['end_date'])) {
+        $start_date = isset($params['start_date']) ? sanitize_text_field($params['start_date']) : '';
+        $end_date = isset($params['end_date']) ? sanitize_text_field($params['end_date']) : '';
+        $scope = $start_date . ',' . $end_date;
+    } else {
+        $scope = isset($params['scope']) ? sanitize_text_field($params['scope']) : 'future';
+    }
 
     // Get events using EME function
     $events = eme_get_events([
@@ -852,6 +866,32 @@ function eme_rest_format_category($category) {
 }
 
 // Recurrence endpoints
+function eme_rest_get_recurrences($request) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'eme_events';
+
+    // Get all events that are recurring templates (events that have child recurring instances)
+    // These are events where other events have this event's ID as their recurrence_id
+    $sql = "
+        SELECT DISTINCT e.*
+        FROM {$table} e
+        INNER JOIN {$table} children ON children.recurrence_id = e.event_id
+        WHERE e.recurrence IS NULL OR e.recurrence = 0
+        ORDER BY e.event_start DESC
+    ";
+
+    $recurring_events = $wpdb->get_results($sql, ARRAY_A);
+
+    if (empty($recurring_events)) {
+        return rest_ensure_response([]);
+    }
+
+    // Format recurring events for REST response
+    $formatted_events = array_map('eme_rest_format_event', $recurring_events);
+
+    return rest_ensure_response($formatted_events);
+}
+
 function eme_rest_create_recurrence($request) {
     $params = $request->get_json_params();
 

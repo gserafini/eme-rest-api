@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.8.0
+ * Version: 1.8.1
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -280,12 +280,24 @@ function eme_rest_get_events($request) {
         $scope = isset($params['scope']) ? sanitize_text_field($params['scope']) : 'future';
     }
 
-    // Get events using EME function
-    $events = eme_get_events([
+    // Build args array for eme_get_events()
+    $eme_args = [
         'scope' => $scope,
         'limit' => $limit,
         'offset' => $offset,
-    ]);
+    ];
+
+    // Pass through additional EME-supported parameters
+    // This allows API users to leverage EME's full query capabilities
+    $passthrough_params = ['recurrences', 'recurring', 'month', 'year', 'category', 'location', 'owner'];
+    foreach ($passthrough_params as $param) {
+        if (isset($params[$param])) {
+            $eme_args[$param] = sanitize_text_field($params[$param]);
+        }
+    }
+
+    // Get events using EME function
+    $events = eme_get_events($eme_args);
 
     if (empty($events)) {
         return rest_ensure_response([]);

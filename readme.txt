@@ -3,7 +3,7 @@ Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
 Requires at least: 5.0
 Tested up to: 6.8
-Stable tag: 1.8.0
+Stable tag: 1.8.2
 Requires PHP: 7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -109,6 +109,16 @@ Events Made Easy version 2.0 or higher is recommended. The plugin uses EME's bui
 Screenshots coming soon.
 
 == Changelog ==
+
+= 1.8.2 - 2025-11-12 =
+* **CRITICAL FIX:** Date range separator changed from comma to double-dash
+* Fixed date range queries to use EME's expected format (YYYY-MM-DD--YYYY-MM-DD)
+* This fix resolves the issue where API was only returning 1 event for date ranges
+
+= 1.8.1 - 2025-11-12 =
+* Added passthrough for EME query parameters (recurrences, recurring, month, year, etc.)
+* Added boolean conversion for recurring/recurrences parameters
+* Added debug response headers (X-EME-Query-Args, X-EME-Event-Count)
 
 = 1.8.0 - 2025-11-12 =
 * **NEW:** Date range query parameters for events endpoint

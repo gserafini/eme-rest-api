@@ -372,6 +372,18 @@ Contributions are welcome! Please feel free to:
 
 ## Changelog
 
+### v1.8.2 - 2025-11-12
+
+* **CRITICAL FIX:** Date range separator changed from comma to double-dash
+* Fixed date range queries to use EME's expected format (`YYYY-MM-DD--YYYY-MM-DD`)
+* This fix resolves the issue where API was only returning 1 event for date ranges
+
+### v1.8.1 - 2025-11-12
+
+* Added passthrough for EME query parameters (`recurrences`, `recurring`, `month`, `year`, etc.)
+* Added boolean conversion for `recurring`/`recurrences` parameters
+* Added debug response headers (`X-EME-Query-Args`, `X-EME-Event-Count`)
+
 ### v1.8.0 - 2025-11-12
 
 * **NEW:** Date range query parameters for events endpoint

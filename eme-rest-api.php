@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.8.1
+ * Version: 1.8.2
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -271,11 +271,11 @@ function eme_rest_get_events($request) {
     $offset = isset($params['page']) ? (intval($params['page']) - 1) * $limit : 0;
 
     // Handle date range parameters (start_date, end_date)
-    // EME's eme_get_events() accepts scope as "YYYY-MM-DD,YYYY-MM-DD" for date ranges
+    // EME's eme_get_events() accepts scope as "YYYY-MM-DD--YYYY-MM-DD" for date ranges (double dash separator)
     if (isset($params['start_date']) || isset($params['end_date'])) {
         $start_date = isset($params['start_date']) ? sanitize_text_field($params['start_date']) : '';
         $end_date = isset($params['end_date']) ? sanitize_text_field($params['end_date']) : '';
-        $scope = $start_date . ',' . $end_date;
+        $scope = $start_date . '--' . $end_date;
     } else {
         $scope = isset($params['scope']) ? sanitize_text_field($params['scope']) : 'future';
     }
@@ -285,6 +285,7 @@ function eme_rest_get_events($request) {
         'scope' => $scope,
         'limit' => $limit,
         'offset' => $offset,
+        'array' => true,  // Return arrays instead of objects for easier processing
     ];
 
     // Pass through additional EME-supported parameters
@@ -292,7 +293,23 @@ function eme_rest_get_events($request) {
     $passthrough_params = ['recurrences', 'recurring', 'month', 'year', 'category', 'location', 'owner'];
     foreach ($passthrough_params as $param) {
         if (isset($params[$param])) {
-            $eme_args[$param] = sanitize_text_field($params[$param]);
+            $value = $params[$param];
+
+            // Convert string booleans to actual booleans for recurring/recurrences
+            if (in_array($param, ['recurring', 'recurrences'])) {
+                if ($value === 'true' || $value === '1') {
+                    $value = true;
+                } elseif ($value === 'false' || $value === '0') {
+                    $value = false;
+                } elseif ($value !== 'include') {
+                    // For 'recurring', also allow 'include' as a string value
+                    $value = sanitize_text_field($value);
+                }
+            } else {
+                $value = sanitize_text_field($value);
+            }
+
+            $eme_args[$param] = $value;
         }
     }
 
@@ -306,7 +323,12 @@ function eme_rest_get_events($request) {
     // Format events for REST response
     $formatted_events = array_map('eme_rest_format_event', $events);
 
-    return rest_ensure_response($formatted_events);
+    // Add debug info to response headers
+    $response = rest_ensure_response($formatted_events);
+    $response->header('X-EME-Query-Args', json_encode($eme_args));
+    $response->header('X-EME-Event-Count', count($events));
+
+    return $response;
 }
 
 function eme_rest_get_event($request) {

@@ -372,6 +372,16 @@ Contributions are welcome! Please feel free to:
 
 ## Changelog
 
+### v1.9.0 - 2025-11-12
+
+* **MAJOR FIX:** Complete rewrite of `eme_get_events()` call to use positional parameters
+* API now returns ALL events matching criteria (like calendar frontend does)
+* Fixed default `per_page` from 10 to 0 (unlimited) to match calendar behavior
+* Added `show_ongoing=1` by default for multi-day events
+* Removed `array` parameter which wasn't recognized by EME
+* API now properly returns recurring event instances
+* This matches how EME's calendar frontend queries events
+
 ### v1.8.2 - 2025-11-12
 
 * **CRITICAL FIX:** Date range separator changed from comma to double-dash

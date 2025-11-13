@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.8.2
+ * Version: 1.9.0
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -266,12 +266,13 @@ function eme_rest_format_status($status_code) {
 function eme_rest_get_events($request) {
     $params = $request->get_params();
 
-    // Default parameters
-    $limit = isset($params['per_page']) ? intval($params['per_page']) : 10;
-    $offset = isset($params['page']) ? (intval($params['page']) - 1) * $limit : 0;
+    // EME's eme_get_events() function signature:
+    // function eme_get_events($o_limit, $scope, $order, $o_offset, $location_id, $category, $author, $contact_person, $show_ongoing, $notcategory, $show_recurrent_events_once, $extra_conditions, $count, $include_customformfields, $search_customfieldids, $search_customfields)
 
-    // Handle date range parameters (start_date, end_date)
-    // EME's eme_get_events() accepts scope as "YYYY-MM-DD--YYYY-MM-DD" for date ranges (double dash separator)
+    // Parameter 1: o_limit (0 = unlimited, like the calendar uses)
+    $limit = isset($params['per_page']) ? intval($params['per_page']) : 0;
+
+    // Parameter 2: scope (date range or named scope like 'future')
     if (isset($params['start_date']) || isset($params['end_date'])) {
         $start_date = isset($params['start_date']) ? sanitize_text_field($params['start_date']) : '';
         $end_date = isset($params['end_date']) ? sanitize_text_field($params['end_date']) : '';
@@ -280,41 +281,48 @@ function eme_rest_get_events($request) {
         $scope = isset($params['scope']) ? sanitize_text_field($params['scope']) : 'future';
     }
 
-    // Build args array for eme_get_events()
-    $eme_args = [
-        'scope' => $scope,
-        'limit' => $limit,
-        'offset' => $offset,
-        'array' => true,  // Return arrays instead of objects for easier processing
-    ];
+    // Parameter 3: order
+    $order = isset($params['order']) ? sanitize_text_field($params['order']) : 'ASC';
 
-    // Pass through additional EME-supported parameters
-    // This allows API users to leverage EME's full query capabilities
-    $passthrough_params = ['recurrences', 'recurring', 'month', 'year', 'category', 'location', 'owner'];
-    foreach ($passthrough_params as $param) {
-        if (isset($params[$param])) {
-            $value = $params[$param];
+    // Parameter 4: o_offset
+    $offset = isset($params['page']) && $limit > 0 ? (intval($params['page']) - 1) * $limit : 0;
 
-            // Convert string booleans to actual booleans for recurring/recurrences
-            if (in_array($param, ['recurring', 'recurrences'])) {
-                if ($value === 'true' || $value === '1') {
-                    $value = true;
-                } elseif ($value === 'false' || $value === '0') {
-                    $value = false;
-                } elseif ($value !== 'include') {
-                    // For 'recurring', also allow 'include' as a string value
-                    $value = sanitize_text_field($value);
-                }
-            } else {
-                $value = sanitize_text_field($value);
-            }
+    // Parameter 5: location_id
+    $location_id = isset($params['location']) ? sanitize_text_field($params['location']) : '';
 
-            $eme_args[$param] = $value;
-        }
-    }
+    // Parameter 6: category
+    $category = isset($params['category']) ? sanitize_text_field($params['category']) : '';
 
-    // Get events using EME function
-    $events = eme_get_events($eme_args);
+    // Parameter 7: author
+    $author = isset($params['author']) ? sanitize_text_field($params['author']) : '';
+
+    // Parameter 8: contact_person
+    $contact_person = isset($params['contact_person']) ? sanitize_text_field($params['contact_person']) : '';
+
+    // Parameter 9: show_ongoing (critical for multi-day events!)
+    $show_ongoing = isset($params['show_ongoing']) ? intval($params['show_ongoing']) : 1;
+
+    // Parameter 10: notcategory
+    $notcategory = isset($params['notcategory']) ? sanitize_text_field($params['notcategory']) : '';
+
+    // Parameter 11: show_recurrent_events_once
+    $show_recurrent_events_once = isset($params['show_recurrent_events_once']) ? intval($params['show_recurrent_events_once']) : 0;
+
+    // Call EME function with POSITIONAL parameters (not array!)
+    // This matches how the calendar calls it
+    $events = eme_get_events(
+        $limit,                      // o_limit
+        $scope,                      // scope
+        $order,                      // order
+        $offset,                     // o_offset
+        $location_id,                // location_id
+        $category,                   // category
+        $author,                     // author
+        $contact_person,             // contact_person
+        $show_ongoing,               // show_ongoing
+        $notcategory,                // notcategory
+        $show_recurrent_events_once  // show_recurrent_events_once
+    );
 
     if (empty($events)) {
         return rest_ensure_response([]);
@@ -324,8 +332,9 @@ function eme_rest_get_events($request) {
     $formatted_events = array_map('eme_rest_format_event', $events);
 
     // Add debug info to response headers
+    $debug_args = compact('limit', 'scope', 'order', 'offset', 'location_id', 'category', 'author', 'contact_person', 'show_ongoing', 'notcategory', 'show_recurrent_events_once');
     $response = rest_ensure_response($formatted_events);
-    $response->header('X-EME-Query-Args', json_encode($eme_args));
+    $response->header('X-EME-Query-Args', json_encode($debug_args));
     $response->header('X-EME-Event-Count', count($events));
 
     return $response;

@@ -2,8 +2,8 @@
 Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
 Requires at least: 5.0
-Tested up to: 6.8
-Stable tag: 1.9.0
+Tested up to: 6.9
+Stable tag: 1.9.1
 Requires PHP: 7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -109,6 +109,10 @@ Events Made Easy version 2.0 or higher is recommended. The plugin uses EME's bui
 Screenshots coming soon.
 
 == Changelog ==
+
+= 1.9.1 =
+* Tested up to WordPress 6.9
+* Coding standards: PHPCS WordPress-Extra formatting improvements
 
 = 1.9.0 - 2025-11-12 =
 * **MAJOR FIX:** Complete rewrite of eme_get_events() call to use positional parameters

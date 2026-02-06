@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.9.0
+ * Version: 1.9.1
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -15,1273 +15,1352 @@
  */
 
 // Exit if accessed directly
-if (!defined('ABSPATH')) {
-    exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
 // Silently check if Events Made Easy is active
 // If not active, plugin does nothing (safe for network activation)
 function eme_rest_api_check_dependencies() {
-    return function_exists('eme_new_event');
+	return function_exists( 'eme_new_event' );
 }
 
 // Plugin activation hook - flush permalinks to register new routes
 function eme_rest_api_activate() {
-    // Flush rewrite rules to ensure REST API routes are properly registered
-    flush_rewrite_rules();
+	// Flush rewrite rules to ensure REST API routes are properly registered
+	flush_rewrite_rules();
 }
-register_activation_hook(__FILE__, 'eme_rest_api_activate');
+register_activation_hook( __FILE__, 'eme_rest_api_activate' );
 
 // Disable canonical redirects for REST API requests
 // This prevents WordPress from adding trailing slashes which breaks REST API POST requests
-add_filter('redirect_canonical', 'eme_rest_api_disable_canonical_redirect', 10, 2);
-function eme_rest_api_disable_canonical_redirect($redirect_url, $requested_url) {
-    // If this is a REST API request, don't redirect
-    if (strpos($requested_url, '/wp-json/') !== false || strpos($requested_url, rest_get_url_prefix()) !== false) {
-        return false;
-    }
-    return $redirect_url;
+add_filter( 'redirect_canonical', 'eme_rest_api_disable_canonical_redirect', 10, 2 );
+function eme_rest_api_disable_canonical_redirect( $redirect_url, $requested_url ) {
+	// If this is a REST API request, don't redirect
+	if ( strpos( $requested_url, '/wp-json/' ) !== false || strpos( $requested_url, rest_get_url_prefix() ) !== false ) {
+		return false;
+	}
+	return $redirect_url;
 }
 
 // Register REST API routes with high priority to prevent conflicts with EME post types
-add_action('rest_api_init', function() {
-    if (!function_exists('eme_new_event')) {
-        return; // EME not active
-    }
+add_action(
+	'rest_api_init',
+	function () {
+		if ( ! function_exists( 'eme_new_event' ) ) {
+			return; // EME not active
+		}
 
-    $namespace = 'eme/v1';
+		$namespace = 'eme/v1';
 
-    // Event endpoints (renamed to /eme_events to avoid conflict with EME custom post types)
-    register_rest_route($namespace, '/eme_events', [
-        [
-            'methods' => 'GET',
-            'callback' => 'eme_rest_get_events',
-            'permission_callback' => 'eme_rest_read_permission',
-        ],
-        [
-            'methods' => 'POST',
-            'callback' => 'eme_rest_create_event',
-            'permission_callback' => 'eme_rest_write_permission',
-        ],
-    ]);
+		// Event endpoints (renamed to /eme_events to avoid conflict with EME custom post types)
+		register_rest_route(
+			$namespace,
+			'/eme_events',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => 'eme_rest_get_events',
+					'permission_callback' => 'eme_rest_read_permission',
+				),
+				array(
+					'methods'             => 'POST',
+					'callback'            => 'eme_rest_create_event',
+					'permission_callback' => 'eme_rest_write_permission',
+				),
+			)
+		);
 
-    register_rest_route($namespace, '/eme_events/(?P<id>\d+)', [
-        [
-            'methods' => 'GET',
-            'callback' => 'eme_rest_get_event',
-            'permission_callback' => 'eme_rest_read_permission',
-        ],
-        [
-            'methods' => ['POST', 'PUT', 'PATCH'],
-            'callback' => 'eme_rest_update_event',
-            'permission_callback' => 'eme_rest_write_permission',
-        ],
-        [
-            'methods' => 'DELETE',
-            'callback' => 'eme_rest_delete_event',
-            'permission_callback' => 'eme_rest_write_permission',
-        ],
-    ]);
+		register_rest_route(
+			$namespace,
+			'/eme_events/(?P<id>\d+)',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => 'eme_rest_get_event',
+					'permission_callback' => 'eme_rest_read_permission',
+				),
+				array(
+					'methods'             => array( 'POST', 'PUT', 'PATCH' ),
+					'callback'            => 'eme_rest_update_event',
+					'permission_callback' => 'eme_rest_write_permission',
+				),
+				array(
+					'methods'             => 'DELETE',
+					'callback'            => 'eme_rest_delete_event',
+					'permission_callback' => 'eme_rest_write_permission',
+				),
+			)
+		);
 
-    // Location endpoints (renamed to /eme_locations to avoid conflict with EME custom post types)
-    register_rest_route($namespace, '/eme_locations', [
-        [
-            'methods' => 'GET',
-            'callback' => 'eme_rest_get_locations',
-            'permission_callback' => 'eme_rest_read_permission',
-        ],
-        [
-            'methods' => 'POST',
-            'callback' => 'eme_rest_create_location',
-            'permission_callback' => 'eme_rest_write_permission',
-        ],
-    ]);
+		// Location endpoints (renamed to /eme_locations to avoid conflict with EME custom post types)
+		register_rest_route(
+			$namespace,
+			'/eme_locations',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => 'eme_rest_get_locations',
+					'permission_callback' => 'eme_rest_read_permission',
+				),
+				array(
+					'methods'             => 'POST',
+					'callback'            => 'eme_rest_create_location',
+					'permission_callback' => 'eme_rest_write_permission',
+				),
+			)
+		);
 
-    register_rest_route($namespace, '/eme_locations/(?P<id>\d+)', [
-        [
-            'methods' => 'GET',
-            'callback' => 'eme_rest_get_location',
-            'permission_callback' => 'eme_rest_read_permission',
-        ],
-        [
-            'methods' => ['POST', 'PUT', 'PATCH'],
-            'callback' => 'eme_rest_update_location',
-            'permission_callback' => 'eme_rest_write_permission',
-        ],
-    ]);
+		register_rest_route(
+			$namespace,
+			'/eme_locations/(?P<id>\d+)',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => 'eme_rest_get_location',
+					'permission_callback' => 'eme_rest_read_permission',
+				),
+				array(
+					'methods'             => array( 'POST', 'PUT', 'PATCH' ),
+					'callback'            => 'eme_rest_update_location',
+					'permission_callback' => 'eme_rest_write_permission',
+				),
+			)
+		);
 
-    // Category endpoints (renamed to /eme_categories to avoid conflict with EME custom post types)
-    register_rest_route($namespace, '/eme_categories', [
-        [
-            'methods' => 'GET',
-            'callback' => 'eme_rest_get_categories',
-            'permission_callback' => 'eme_rest_read_permission',
-        ],
-        [
-            'methods' => 'POST',
-            'callback' => 'eme_rest_create_category',
-            'permission_callback' => 'eme_rest_write_permission',
-        ],
-    ]);
+		// Category endpoints (renamed to /eme_categories to avoid conflict with EME custom post types)
+		register_rest_route(
+			$namespace,
+			'/eme_categories',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => 'eme_rest_get_categories',
+					'permission_callback' => 'eme_rest_read_permission',
+				),
+				array(
+					'methods'             => 'POST',
+					'callback'            => 'eme_rest_create_category',
+					'permission_callback' => 'eme_rest_write_permission',
+				),
+			)
+		);
 
-    // Recurrence endpoints (renamed to /eme_recurrences to avoid conflict with EME custom post types)
-    register_rest_route($namespace, '/eme_recurrences', [
-        [
-            'methods' => 'GET',
-            'callback' => 'eme_rest_get_recurrences',
-            'permission_callback' => 'eme_rest_read_permission',
-        ],
-        [
-            'methods' => 'POST',
-            'callback' => 'eme_rest_create_recurrence',
-            'permission_callback' => 'eme_rest_write_permission',
-        ],
-    ]);
+		// Recurrence endpoints (renamed to /eme_recurrences to avoid conflict with EME custom post types)
+		register_rest_route(
+			$namespace,
+			'/eme_recurrences',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => 'eme_rest_get_recurrences',
+					'permission_callback' => 'eme_rest_read_permission',
+				),
+				array(
+					'methods'             => 'POST',
+					'callback'            => 'eme_rest_create_recurrence',
+					'permission_callback' => 'eme_rest_write_permission',
+				),
+			)
+		);
 
-    register_rest_route($namespace, '/eme_recurrences/(?P<id>\d+)', [
-        [
-            'methods' => 'GET',
-            'callback' => 'eme_rest_get_recurrence',
-            'permission_callback' => 'eme_rest_read_permission',
-        ],
-        [
-            'methods' => 'DELETE',
-            'callback' => 'eme_rest_delete_recurrence',
-            'permission_callback' => 'eme_rest_write_permission',
-        ],
-    ]);
+		register_rest_route(
+			$namespace,
+			'/eme_recurrences/(?P<id>\d+)',
+			array(
+				array(
+					'methods'             => 'GET',
+					'callback'            => 'eme_rest_get_recurrence',
+					'permission_callback' => 'eme_rest_read_permission',
+				),
+				array(
+					'methods'             => 'DELETE',
+					'callback'            => 'eme_rest_delete_recurrence',
+					'permission_callback' => 'eme_rest_write_permission',
+				),
+			)
+		);
 
-    register_rest_route($namespace, '/eme_recurrences/(?P<id>\d+)/instances', [
-        'methods' => 'GET',
-        'callback' => 'eme_rest_get_recurrence_instances',
-        'permission_callback' => 'eme_rest_read_permission',
-    ]);
-});
+		register_rest_route(
+			$namespace,
+			'/eme_recurrences/(?P<id>\d+)/instances',
+			array(
+				'methods'             => 'GET',
+				'callback'            => 'eme_rest_get_recurrence_instances',
+				'permission_callback' => 'eme_rest_read_permission',
+			)
+		);
+	}
+);
 
 // Permission callbacks
 function eme_rest_read_permission() {
-    // Allow reading for anyone (can be restricted if needed)
-    return true;
+	// Allow reading for anyone (can be restricted if needed)
+	return true;
 }
 
 function eme_rest_write_permission() {
-    // Require authentication and edit_posts capability
-    return current_user_can('edit_posts');
+	// Require authentication and edit_posts capability
+	return current_user_can( 'edit_posts' );
 }
 
 // Geocoding function using OpenStreetMap Nominatim (same as EME frontend)
-function eme_rest_geocode_location($location) {
-    // Build search query from location components
-    $address_parts = array_filter([
-        isset($location['location_address1']) ? $location['location_address1'] : '',
-        isset($location['location_address2']) ? $location['location_address2'] : '',
-        isset($location['location_city']) ? $location['location_city'] : '',
-        isset($location['location_state']) ? $location['location_state'] : '',
-        isset($location['location_zip']) ? $location['location_zip'] : '',
-        isset($location['location_country']) ? $location['location_country'] : '',
-    ]);
+function eme_rest_geocode_location( $location ) {
+	// Build search query from location components
+	$address_parts = array_filter(
+		array(
+			isset( $location['location_address1'] ) ? $location['location_address1'] : '',
+			isset( $location['location_address2'] ) ? $location['location_address2'] : '',
+			isset( $location['location_city'] ) ? $location['location_city'] : '',
+			isset( $location['location_state'] ) ? $location['location_state'] : '',
+			isset( $location['location_zip'] ) ? $location['location_zip'] : '',
+			isset( $location['location_country'] ) ? $location['location_country'] : '',
+		)
+	);
 
-    if (empty($address_parts)) {
-        return false; // No address to geocode
-    }
+	if ( empty( $address_parts ) ) {
+		return false; // No address to geocode
+	}
 
-    $search_query = implode(', ', $address_parts);
+	$search_query = implode( ', ', $address_parts );
 
-    // Use OpenStreetMap Nominatim API (same as EME uses)
-    $geocode_url = 'https://nominatim.openstreetmap.org/search';
-    $params = [
-        'format' => 'json',
-        'limit' => 1,
-        'q' => $search_query,
-    ];
+	// Use OpenStreetMap Nominatim API (same as EME uses)
+	$geocode_url = 'https://nominatim.openstreetmap.org/search';
+	$params      = array(
+		'format' => 'json',
+		'limit'  => 1,
+		'q'      => $search_query,
+	);
 
-    $url = $geocode_url . '?' . http_build_query($params);
+	$url = $geocode_url . '?' . http_build_query( $params );
 
-    // Set user agent as required by Nominatim usage policy
-    $args = [
-        'headers' => [
-            'User-Agent' => 'EME-REST-API/1.6.7 WordPress/' . get_bloginfo('version'),
-        ],
-        'timeout' => 10,
-    ];
+	// Set user agent as required by Nominatim usage policy
+	$args = array(
+		'headers' => array(
+			'User-Agent' => 'EME-REST-API/1.6.7 WordPress/' . get_bloginfo( 'version' ),
+		),
+		'timeout' => 10,
+	);
 
-    $response = wp_remote_get($url, $args);
+	$response = wp_remote_get( $url, $args );
 
-    if (is_wp_error($response)) {
-        return false;
-    }
+	if ( is_wp_error( $response ) ) {
+		return false;
+	}
 
-    $body = wp_remote_retrieve_body($response);
-    $data = json_decode($body, true);
+	$body = wp_remote_retrieve_body( $response );
+	$data = json_decode( $body, true );
 
-    if (!empty($data) && isset($data[0]['lat']) && isset($data[0]['lon'])) {
-        return [
-            'latitude' => $data[0]['lat'],
-            'longitude' => $data[0]['lon'],
-        ];
-    }
+	if ( ! empty( $data ) && isset( $data[0]['lat'] ) && isset( $data[0]['lon'] ) ) {
+		return array(
+			'latitude'  => $data[0]['lat'],
+			'longitude' => $data[0]['lon'],
+		);
+	}
 
-    return false;
+	return false;
 }
 
 // Helper function to map status strings to EME status codes
-function eme_rest_map_status($status_string) {
-    // EME status constants:
-    // EME_EVENT_STATUS_TRASH = 0
-    // EME_EVENT_STATUS_PUBLIC = 1
-    // EME_EVENT_STATUS_PRIVATE = 2
-    // EME_EVENT_STATUS_UNLISTED = 3
-    // EME_EVENT_STATUS_DRAFT = 5
-    // EME_EVENT_STATUS_FS_DRAFT = 6
+function eme_rest_map_status( $status_string ) {
+	// EME status constants:
+	// EME_EVENT_STATUS_TRASH = 0
+	// EME_EVENT_STATUS_PUBLIC = 1
+	// EME_EVENT_STATUS_PRIVATE = 2
+	// EME_EVENT_STATUS_UNLISTED = 3
+	// EME_EVENT_STATUS_DRAFT = 5
+	// EME_EVENT_STATUS_FS_DRAFT = 6
 
-    $status_map = [
-        'trash' => 0,
-        'published' => 1,
-        'public' => 1,
-        'private' => 2,
-        'unlisted' => 3,
-        'draft' => 5,
-        'fs_draft' => 6,
-    ];
+	$status_map = array(
+		'trash'     => 0,
+		'published' => 1,
+		'public'    => 1,
+		'private'   => 2,
+		'unlisted'  => 3,
+		'draft'     => 5,
+		'fs_draft'  => 6,
+	);
 
-    $normalized_status = strtolower(trim($status_string));
-    return isset($status_map[$normalized_status]) ? $status_map[$normalized_status] : 5; // default to draft
+	$normalized_status = strtolower( trim( $status_string ) );
+	return isset( $status_map[ $normalized_status ] ) ? $status_map[ $normalized_status ] : 5; // default to draft
 }
 
 // Helper function to map EME status codes to readable strings
-function eme_rest_format_status($status_code) {
-    $status_names = [
-        0 => 'trash',
-        1 => 'published',
-        2 => 'private',
-        3 => 'unlisted',
-        5 => 'draft',
-        6 => 'fs_draft',
-    ];
+function eme_rest_format_status( $status_code ) {
+	$status_names = array(
+		0 => 'trash',
+		1 => 'published',
+		2 => 'private',
+		3 => 'unlisted',
+		5 => 'draft',
+		6 => 'fs_draft',
+	);
 
-    return isset($status_names[$status_code]) ? $status_names[$status_code] : 'unknown';
+	return isset( $status_names[ $status_code ] ) ? $status_names[ $status_code ] : 'unknown';
 }
 
 // Event endpoints
-function eme_rest_get_events($request) {
-    $params = $request->get_params();
+function eme_rest_get_events( $request ) {
+	$params = $request->get_params();
 
-    // EME's eme_get_events() function signature:
-    // function eme_get_events($o_limit, $scope, $order, $o_offset, $location_id, $category, $author, $contact_person, $show_ongoing, $notcategory, $show_recurrent_events_once, $extra_conditions, $count, $include_customformfields, $search_customfieldids, $search_customfields)
+	// EME's eme_get_events() function signature:
+	// function eme_get_events($o_limit, $scope, $order, $o_offset, $location_id, $category, $author, $contact_person, $show_ongoing, $notcategory, $show_recurrent_events_once, $extra_conditions, $count, $include_customformfields, $search_customfieldids, $search_customfields)
 
-    // Parameter 1: o_limit (0 = unlimited, like the calendar uses)
-    $limit = isset($params['per_page']) ? intval($params['per_page']) : 0;
+	// Parameter 1: o_limit (0 = unlimited, like the calendar uses)
+	$limit = isset( $params['per_page'] ) ? intval( $params['per_page'] ) : 0;
 
-    // Parameter 2: scope (date range or named scope like 'future')
-    if (isset($params['start_date']) || isset($params['end_date'])) {
-        $start_date = isset($params['start_date']) ? sanitize_text_field($params['start_date']) : '';
-        $end_date = isset($params['end_date']) ? sanitize_text_field($params['end_date']) : '';
-        $scope = $start_date . '--' . $end_date;
-    } else {
-        $scope = isset($params['scope']) ? sanitize_text_field($params['scope']) : 'future';
-    }
+	// Parameter 2: scope (date range or named scope like 'future')
+	if ( isset( $params['start_date'] ) || isset( $params['end_date'] ) ) {
+		$start_date = isset( $params['start_date'] ) ? sanitize_text_field( $params['start_date'] ) : '';
+		$end_date   = isset( $params['end_date'] ) ? sanitize_text_field( $params['end_date'] ) : '';
+		$scope      = $start_date . '--' . $end_date;
+	} else {
+		$scope = isset( $params['scope'] ) ? sanitize_text_field( $params['scope'] ) : 'future';
+	}
 
-    // Parameter 3: order
-    $order = isset($params['order']) ? sanitize_text_field($params['order']) : 'ASC';
+	// Parameter 3: order
+	$order = isset( $params['order'] ) ? sanitize_text_field( $params['order'] ) : 'ASC';
 
-    // Parameter 4: o_offset
-    $offset = isset($params['page']) && $limit > 0 ? (intval($params['page']) - 1) * $limit : 0;
+	// Parameter 4: o_offset
+	$offset = isset( $params['page'] ) && $limit > 0 ? ( intval( $params['page'] ) - 1 ) * $limit : 0;
 
-    // Parameter 5: location_id
-    $location_id = isset($params['location']) ? sanitize_text_field($params['location']) : '';
+	// Parameter 5: location_id
+	$location_id = isset( $params['location'] ) ? sanitize_text_field( $params['location'] ) : '';
 
-    // Parameter 6: category
-    $category = isset($params['category']) ? sanitize_text_field($params['category']) : '';
+	// Parameter 6: category
+	$category = isset( $params['category'] ) ? sanitize_text_field( $params['category'] ) : '';
 
-    // Parameter 7: author
-    $author = isset($params['author']) ? sanitize_text_field($params['author']) : '';
+	// Parameter 7: author
+	$author = isset( $params['author'] ) ? sanitize_text_field( $params['author'] ) : '';
 
-    // Parameter 8: contact_person
-    $contact_person = isset($params['contact_person']) ? sanitize_text_field($params['contact_person']) : '';
+	// Parameter 8: contact_person
+	$contact_person = isset( $params['contact_person'] ) ? sanitize_text_field( $params['contact_person'] ) : '';
 
-    // Parameter 9: show_ongoing (critical for multi-day events!)
-    $show_ongoing = isset($params['show_ongoing']) ? intval($params['show_ongoing']) : 1;
+	// Parameter 9: show_ongoing (critical for multi-day events!)
+	$show_ongoing = isset( $params['show_ongoing'] ) ? intval( $params['show_ongoing'] ) : 1;
 
-    // Parameter 10: notcategory
-    $notcategory = isset($params['notcategory']) ? sanitize_text_field($params['notcategory']) : '';
+	// Parameter 10: notcategory
+	$notcategory = isset( $params['notcategory'] ) ? sanitize_text_field( $params['notcategory'] ) : '';
 
-    // Parameter 11: show_recurrent_events_once
-    $show_recurrent_events_once = isset($params['show_recurrent_events_once']) ? intval($params['show_recurrent_events_once']) : 0;
+	// Parameter 11: show_recurrent_events_once
+	$show_recurrent_events_once = isset( $params['show_recurrent_events_once'] ) ? intval( $params['show_recurrent_events_once'] ) : 0;
 
-    // Call EME function with POSITIONAL parameters (not array!)
-    // This matches how the calendar calls it
-    $events = eme_get_events(
-        $limit,                      // o_limit
-        $scope,                      // scope
-        $order,                      // order
-        $offset,                     // o_offset
-        $location_id,                // location_id
-        $category,                   // category
-        $author,                     // author
-        $contact_person,             // contact_person
-        $show_ongoing,               // show_ongoing
-        $notcategory,                // notcategory
-        $show_recurrent_events_once  // show_recurrent_events_once
-    );
+	// Call EME function with POSITIONAL parameters (not array!)
+	// This matches how the calendar calls it
+	$events = eme_get_events(
+		$limit,                      // o_limit
+		$scope,                      // scope
+		$order,                      // order
+		$offset,                     // o_offset
+		$location_id,                // location_id
+		$category,                   // category
+		$author,                     // author
+		$contact_person,             // contact_person
+		$show_ongoing,               // show_ongoing
+		$notcategory,                // notcategory
+		$show_recurrent_events_once  // show_recurrent_events_once
+	);
 
-    if (empty($events)) {
-        return rest_ensure_response([]);
-    }
+	if ( empty( $events ) ) {
+		return rest_ensure_response( array() );
+	}
 
-    // Format events for REST response
-    $formatted_events = array_map('eme_rest_format_event', $events);
+	// Format events for REST response
+	$formatted_events = array_map( 'eme_rest_format_event', $events );
 
-    // Add debug info to response headers
-    $debug_args = compact('limit', 'scope', 'order', 'offset', 'location_id', 'category', 'author', 'contact_person', 'show_ongoing', 'notcategory', 'show_recurrent_events_once');
-    $response = rest_ensure_response($formatted_events);
-    $response->header('X-EME-Query-Args', json_encode($debug_args));
-    $response->header('X-EME-Event-Count', count($events));
+	// Add debug info to response headers
+	$debug_args = compact( 'limit', 'scope', 'order', 'offset', 'location_id', 'category', 'author', 'contact_person', 'show_ongoing', 'notcategory', 'show_recurrent_events_once' );
+	$response   = rest_ensure_response( $formatted_events );
+	$response->header( 'X-EME-Query-Args', wp_json_encode( $debug_args ) );
+	$response->header( 'X-EME-Event-Count', count( $events ) );
 
-    return $response;
+	return $response;
 }
 
-function eme_rest_get_event($request) {
-    $event_id = intval($request['id']);
+function eme_rest_get_event( $request ) {
+	$event_id = intval( $request['id'] );
 
-    // Use EME's built-in function to get event
-    $event = eme_get_event($event_id);
+	// Use EME's built-in function to get event
+	$event = eme_get_event( $event_id );
 
-    if (!$event) {
-        return new WP_Error('not_found', 'Event not found', ['status' => 404]);
-    }
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
+	}
 
-    return rest_ensure_response(eme_rest_format_event($event));
+	return rest_ensure_response( eme_rest_format_event( $event ) );
 }
 
-function eme_rest_create_event($request) {
-    $params = $request->get_json_params();
+function eme_rest_create_event( $request ) {
+	$params = $request->get_json_params();
 
-    // Validate required fields
-    if (empty($params['title'])) {
-        return new WP_Error('missing_title', 'Event title is required', ['status' => 400]);
-    }
-    if (empty($params['start_date'])) {
-        return new WP_Error('missing_start_date', 'Event start date is required', ['status' => 400]);
-    }
+	// Validate required fields
+	if ( empty( $params['title'] ) ) {
+		return new WP_Error( 'missing_title', 'Event title is required', array( 'status' => 400 ) );
+	}
+	if ( empty( $params['start_date'] ) ) {
+		return new WP_Error( 'missing_start_date', 'Event start date is required', array( 'status' => 400 ) );
+	}
 
-    // Check if EME functions are available
-    if (!function_exists('eme_new_event') || !function_exists('eme_db_insert_event')) {
-        return new WP_Error('eme_not_available', 'Events Made Easy plugin functions not available', ['status' => 500]);
-    }
+	// Check if EME functions are available
+	if ( ! function_exists( 'eme_new_event' ) || ! function_exists( 'eme_db_insert_event' ) ) {
+		return new WP_Error( 'eme_not_available', 'Events Made Easy plugin functions not available', array( 'status' => 500 ) );
+	}
 
-    // Use EME's native template function
-    $event = eme_new_event();
+	// Use EME's native template function
+	$event = eme_new_event();
 
-    // Map REST API parameters to EME structure
-    $event['event_name'] = sanitize_text_field($params['title']);
-    $event['event_notes'] = isset($params['description']) ? wp_kses_post($params['description']) : '';
+	// Map REST API parameters to EME structure
+	$event['event_name']  = sanitize_text_field( $params['title'] );
+	$event['event_notes'] = isset( $params['description'] ) ? wp_kses_post( $params['description'] ) : '';
 
-    // EME can handle both full datetime or separate date/time
-    // Priority: full datetime if provided, otherwise separate fields
-    if (isset($params['start_datetime'])) {
-        $event['event_start'] = sanitize_text_field($params['start_datetime']);
-    } else {
-        $start_time = isset($params['start_time']) ? sanitize_text_field($params['start_time']) : '00:00:00';
-        $event['event_start'] = sanitize_text_field($params['start_date']) . ' ' . $start_time;
-    }
+	// EME can handle both full datetime or separate date/time
+	// Priority: full datetime if provided, otherwise separate fields
+	if ( isset( $params['start_datetime'] ) ) {
+		$event['event_start'] = sanitize_text_field( $params['start_datetime'] );
+	} else {
+		$start_time           = isset( $params['start_time'] ) ? sanitize_text_field( $params['start_time'] ) : '00:00:00';
+		$event['event_start'] = sanitize_text_field( $params['start_date'] ) . ' ' . $start_time;
+	}
 
-    if (isset($params['end_datetime'])) {
-        $event['event_end'] = sanitize_text_field($params['end_datetime']);
-    } else {
-        $end_date = isset($params['end_date']) ? sanitize_text_field($params['end_date']) : sanitize_text_field($params['start_date']);
-        $end_time = isset($params['end_time']) ? sanitize_text_field($params['end_time']) : '23:59:59';
-        $event['event_end'] = $end_date . ' ' . $end_time;
-    }
+	if ( isset( $params['end_datetime'] ) ) {
+		$event['event_end'] = sanitize_text_field( $params['end_datetime'] );
+	} else {
+		$end_date           = isset( $params['end_date'] ) ? sanitize_text_field( $params['end_date'] ) : sanitize_text_field( $params['start_date'] );
+		$end_time           = isset( $params['end_time'] ) ? sanitize_text_field( $params['end_time'] ) : '23:59:59';
+		$event['event_end'] = $end_date . ' ' . $end_time;
+	}
 
-    // Set event status (defaults to draft if not specified)
-    $event['event_status'] = isset($params['status']) ? eme_rest_map_status($params['status']) : 5;
+	// Set event status (defaults to draft if not specified)
+	$event['event_status'] = isset( $params['status'] ) ? eme_rest_map_status( $params['status'] ) : 5;
 
-    // Optional fields
-    if (isset($params['location_id'])) {
-        $event['location_id'] = intval($params['location_id']);
-    }
+	// Optional fields
+	if ( isset( $params['location_id'] ) ) {
+		$event['location_id'] = intval( $params['location_id'] );
+	}
 
-    if (isset($params['category_ids'])) {
-        $event['event_category_ids'] = is_array($params['category_ids'])
-            ? implode(',', array_map('intval', $params['category_ids']))
-            : sanitize_text_field($params['category_ids']);
-    }
+	if ( isset( $params['category_ids'] ) ) {
+		$event['event_category_ids'] = is_array( $params['category_ids'] )
+			? implode( ',', array_map( 'intval', $params['category_ids'] ) )
+			: sanitize_text_field( $params['category_ids'] );
+	}
 
-    if (isset($params['rsvp'])) {
-        $event['event_rsvp'] = (bool)$params['rsvp'] ? 1 : 0;
-    }
+	if ( isset( $params['rsvp'] ) ) {
+		$event['event_rsvp'] = (bool) $params['rsvp'] ? 1 : 0;
+	}
 
-    if (isset($params['seats'])) {
-        $event['event_seats'] = intval($params['seats']);
-    }
+	if ( isset( $params['seats'] ) ) {
+		$event['event_seats'] = intval( $params['seats'] );
+	}
 
-    if (isset($params['price'])) {
-        $event['price'] = sanitize_text_field($params['price']);
-    }
+	if ( isset( $params['price'] ) ) {
+		$event['price'] = sanitize_text_field( $params['price'] );
+	}
 
-    if (isset($params['currency'])) {
-        $event['currency'] = sanitize_text_field($params['currency']);
-    }
+	if ( isset( $params['currency'] ) ) {
+		$event['currency'] = sanitize_text_field( $params['currency'] );
+	}
 
-    if (isset($params['image_id'])) {
-        $event['event_image_id'] = intval($params['image_id']);
-    }
+	if ( isset( $params['image_id'] ) ) {
+		$event['event_image_id'] = intval( $params['image_id'] );
+	}
 
-    if (isset($params['contact_person_id'])) {
-        $event['event_contactperson_id'] = intval($params['contact_person_id']);
-    }
+	if ( isset( $params['contact_person_id'] ) ) {
+		$event['event_contactperson_id'] = intval( $params['contact_person_id'] );
+	}
 
-    if (isset($params['url'])) {
-        $event['event_url'] = esc_url_raw($params['url']);
-    }
+	if ( isset( $params['url'] ) ) {
+		$event['event_url'] = esc_url_raw( $params['url'] );
+	}
 
-    // Use EME's native insert function
-    $event_id = eme_db_insert_event($event);
+	// Use EME's native insert function
+	$event_id = eme_db_insert_event( $event );
 
-    if (!$event_id) {
-        return new WP_Error('creation_failed', 'Failed to create event', ['status' => 500]);
-    }
+	if ( ! $event_id ) {
+		return new WP_Error( 'creation_failed', 'Failed to create event', array( 'status' => 500 ) );
+	}
 
-    // Get the created event using EME's function
-    if (function_exists('eme_get_event')) {
-        $created_event = eme_get_event($event_id);
-    } else {
-        $created_event = ['event_id' => $event_id];
-    }
+	// Get the created event using EME's function
+	if ( function_exists( 'eme_get_event' ) ) {
+		$created_event = eme_get_event( $event_id );
+	} else {
+		$created_event = array( 'event_id' => $event_id );
+	}
 
-    return rest_ensure_response([
-        'success' => true,
-        'event_id' => $event_id,
-        'event' => eme_rest_format_event($created_event),
-        'message' => 'Event created successfully',
-    ]);
+	return rest_ensure_response(
+		array(
+			'success'  => true,
+			'event_id' => $event_id,
+			'event'    => eme_rest_format_event( $created_event ),
+			'message'  => 'Event created successfully',
+		)
+	);
 }
 
-function eme_rest_update_event($request) {
-    $event_id = intval($request['id']);
-    $params = $request->get_json_params();
+function eme_rest_update_event( $request ) {
+	$event_id = intval( $request['id'] );
+	$params   = $request->get_json_params();
 
-    // Get existing event using EME's built-in function
-    $event = eme_get_event($event_id);
+	// Get existing event using EME's built-in function
+	$event = eme_get_event( $event_id );
 
-    if (!$event) {
-        return new WP_Error('not_found', 'Event not found', ['status' => 404]);
-    }
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
+	}
 
-    // Update event fields with provided parameters
-    if (isset($params['title'])) {
-        $event['event_name'] = sanitize_text_field($params['title']);
-    }
-    if (isset($params['description'])) {
-        $event['event_notes'] = wp_kses_post($params['description']);
-    }
-    if (isset($params['start_date'])) {
-        $event['event_start'] = sanitize_text_field($params['start_date']);
-    }
-    if (isset($params['end_date'])) {
-        $event['event_end'] = sanitize_text_field($params['end_date']);
-    }
-    if (isset($params['status'])) {
-        $event['event_status'] = eme_rest_map_status($params['status']);
-    }
-    if (isset($params['location_id'])) {
-        $event['location_id'] = intval($params['location_id']);
-    }
-    if (isset($params['category_ids'])) {
-        $event['event_category_ids'] = is_array($params['category_ids'])
-            ? implode(',', array_map('intval', $params['category_ids']))
-            : sanitize_text_field($params['category_ids']);
-    }
-    if (isset($params['rsvp'])) {
-        $event['event_rsvp'] = (bool)$params['rsvp'] ? 1 : 0;
-    }
-    if (isset($params['seats'])) {
-        $event['event_seats'] = intval($params['seats']);
-    }
-    if (isset($params['price'])) {
-        $event['price'] = sanitize_text_field($params['price']);
-    }
-    if (isset($params['currency'])) {
-        $event['currency'] = sanitize_text_field($params['currency']);
-    }
-    if (isset($params['image_id'])) {
-        $event['event_image_id'] = intval($params['image_id']);
-    }
-    if (isset($params['contact_person_id'])) {
-        $event['event_contactperson_id'] = intval($params['contact_person_id']);
-    }
+	// Update event fields with provided parameters
+	if ( isset( $params['title'] ) ) {
+		$event['event_name'] = sanitize_text_field( $params['title'] );
+	}
+	if ( isset( $params['description'] ) ) {
+		$event['event_notes'] = wp_kses_post( $params['description'] );
+	}
+	if ( isset( $params['start_date'] ) ) {
+		$event['event_start'] = sanitize_text_field( $params['start_date'] );
+	}
+	if ( isset( $params['end_date'] ) ) {
+		$event['event_end'] = sanitize_text_field( $params['end_date'] );
+	}
+	if ( isset( $params['status'] ) ) {
+		$event['event_status'] = eme_rest_map_status( $params['status'] );
+	}
+	if ( isset( $params['location_id'] ) ) {
+		$event['location_id'] = intval( $params['location_id'] );
+	}
+	if ( isset( $params['category_ids'] ) ) {
+		$event['event_category_ids'] = is_array( $params['category_ids'] )
+			? implode( ',', array_map( 'intval', $params['category_ids'] ) )
+			: sanitize_text_field( $params['category_ids'] );
+	}
+	if ( isset( $params['rsvp'] ) ) {
+		$event['event_rsvp'] = (bool) $params['rsvp'] ? 1 : 0;
+	}
+	if ( isset( $params['seats'] ) ) {
+		$event['event_seats'] = intval( $params['seats'] );
+	}
+	if ( isset( $params['price'] ) ) {
+		$event['price'] = sanitize_text_field( $params['price'] );
+	}
+	if ( isset( $params['currency'] ) ) {
+		$event['currency'] = sanitize_text_field( $params['currency'] );
+	}
+	if ( isset( $params['image_id'] ) ) {
+		$event['event_image_id'] = intval( $params['image_id'] );
+	}
+	if ( isset( $params['contact_person_id'] ) ) {
+		$event['event_contactperson_id'] = intval( $params['contact_person_id'] );
+	}
 
-    // Update event using EME's built-in function
-    $result = eme_db_update_event($event, $event_id);
+	// Update event using EME's built-in function
+	$result = eme_db_update_event( $event, $event_id );
 
-    if (!$result) {
-        return new WP_Error('update_failed', 'Failed to update event', ['status' => 500]);
-    }
+	if ( ! $result ) {
+		return new WP_Error( 'update_failed', 'Failed to update event', array( 'status' => 500 ) );
+	}
 
-    // Get updated event
-    $updated_event = eme_get_event($event_id);
+	// Get updated event
+	$updated_event = eme_get_event( $event_id );
 
-    return rest_ensure_response([
-        'success' => true,
-        'event' => eme_rest_format_event($updated_event),
-        'message' => 'Event updated successfully',
-    ]);
+	return rest_ensure_response(
+		array(
+			'success' => true,
+			'event'   => eme_rest_format_event( $updated_event ),
+			'message' => 'Event updated successfully',
+		)
+	);
 }
 
-function eme_rest_delete_event($request) {
-    $event_id = intval($request['id']);
+function eme_rest_delete_event( $request ) {
+	$event_id = intval( $request['id'] );
 
-    // Check if event exists before deletion
-    $event = eme_get_event($event_id);
-    if (!$event) {
-        return new WP_Error('not_found', 'Event not found', ['status' => 404]);
-    }
+	// Check if event exists before deletion
+	$event = eme_get_event( $event_id );
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
+	}
 
-    // Delete event (eme_db_delete_event returns void/null, not success/failure)
-    eme_db_delete_event($event_id);
+	// Delete event (eme_db_delete_event returns void/null, not success/failure)
+	eme_db_delete_event( $event_id );
 
-    // Clear WordPress object cache for this event to ensure fresh DB query
-    wp_cache_delete("eme_event $event_id");
+	// Clear WordPress object cache for this event to ensure fresh DB query
+	wp_cache_delete( "eme_event $event_id" );
 
-    // Verify deletion by querying database (cache is cleared, so this hits DB)
-    $check = eme_get_event($event_id);
-    if ($check) {
-        // Event still exists in database, deletion failed
-        return new WP_Error('deletion_failed', 'Failed to delete event', ['status' => 500]);
-    }
+	// Verify deletion by querying database (cache is cleared, so this hits DB)
+	$check = eme_get_event( $event_id );
+	if ( $check ) {
+		// Event still exists in database, deletion failed
+		return new WP_Error( 'deletion_failed', 'Failed to delete event', array( 'status' => 500 ) );
+	}
 
-    // Event successfully deleted
-    return rest_ensure_response([
-        'success' => true,
-        'message' => 'Event deleted successfully',
-    ]);
+	// Event successfully deleted
+	return rest_ensure_response(
+		array(
+			'success' => true,
+			'message' => 'Event deleted successfully',
+		)
+	);
 }
 
-function eme_rest_change_status($request) {
-    $event_id = intval($request['id']);
-    $params = $request->get_json_params();
+function eme_rest_change_status( $request ) {
+	$event_id = intval( $request['id'] );
+	$params   = $request->get_json_params();
 
-    // Validate status parameter
-    if (!isset($params['status'])) {
-        return new WP_Error('missing_status', 'Status parameter is required', ['status' => 400]);
-    }
+	// Validate status parameter
+	if ( ! isset( $params['status'] ) ) {
+		return new WP_Error( 'missing_status', 'Status parameter is required', array( 'status' => 400 ) );
+	}
 
-    // Get existing event using EME's built-in function
-    $event = eme_get_event($event_id);
+	// Get existing event using EME's built-in function
+	$event = eme_get_event( $event_id );
 
-    if (!$event) {
-        return new WP_Error('not_found', 'Event not found', ['status' => 404]);
-    }
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
+	}
 
-    // Map status string to EME status code
-    $new_status = eme_rest_map_status($params['status']);
+	// Map status string to EME status code
+	$new_status = eme_rest_map_status( $params['status'] );
 
-    // Validate status code (must be 0-6)
-    $valid_statuses = [0, 1, 2, 3, 5, 6]; // trash, public, private, unlisted, draft, fs_draft
-    if (!in_array($new_status, $valid_statuses)) {
-        return new WP_Error('invalid_status', 'Invalid status code', ['status' => 400]);
-    }
+	// Validate status code (must be 0-6)
+	// Status codes: 0=trash, 1=public, 2=private, 3=unlisted, 5=draft, 6=fs_draft.
+	$valid_statuses = array( 0, 1, 2, 3, 5, 6 );
+	if ( ! in_array( $new_status, $valid_statuses, true ) ) {
+		return new WP_Error( 'invalid_status', 'Invalid status code', array( 'status' => 400 ) );
+	}
 
-    // Update status using EME's built-in function
-    eme_change_event_status($event_id, $new_status);
+	// Update status using EME's built-in function
+	eme_change_event_status( $event_id, $new_status );
 
-    // Get updated event
-    $updated_event = eme_get_event($event_id);
+	// Get updated event
+	$updated_event = eme_get_event( $event_id );
 
-    return rest_ensure_response([
-        'success' => true,
-        'event' => eme_rest_format_event($updated_event),
-        'previous_status' => eme_rest_format_status($event['event_status']),
-        'new_status' => eme_rest_format_status($new_status),
-        'message' => sprintf('Event status changed from %s to %s', eme_rest_format_status($event['event_status']), eme_rest_format_status($new_status)),
-    ]);
+	return rest_ensure_response(
+		array(
+			'success'         => true,
+			'event'           => eme_rest_format_event( $updated_event ),
+			'previous_status' => eme_rest_format_status( $event['event_status'] ),
+			'new_status'      => eme_rest_format_status( $new_status ),
+			'message'         => sprintf( 'Event status changed from %s to %s', eme_rest_format_status( $event['event_status'] ), eme_rest_format_status( $new_status ) ),
+		)
+	);
 }
 
-function eme_rest_publish_event($request) {
-    $event_id = intval($request['id']);
+function eme_rest_publish_event( $request ) {
+	$event_id = intval( $request['id'] );
 
-    // Get existing event using EME's built-in function
-    $event = eme_get_event($event_id);
+	// Get existing event using EME's built-in function
+	$event = eme_get_event( $event_id );
 
-    if (!$event) {
-        return new WP_Error('not_found', 'Event not found', ['status' => 404]);
-    }
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
+	}
 
-    // Update status to published using EME's built-in function
-    eme_change_event_status($event_id, 1); // 1 = published/public
+	// Update status to published using EME's built-in function
+	eme_change_event_status( $event_id, 1 ); // 1 = published/public
 
-    // Get updated event
-    $updated_event = eme_get_event($event_id);
+	// Get updated event
+	$updated_event = eme_get_event( $event_id );
 
-    return rest_ensure_response([
-        'success' => true,
-        'event' => eme_rest_format_event($updated_event),
-        'message' => 'Event published successfully',
-    ]);
+	return rest_ensure_response(
+		array(
+			'success' => true,
+			'event'   => eme_rest_format_event( $updated_event ),
+			'message' => 'Event published successfully',
+		)
+	);
 }
 
-// Location endpoints
-function eme_rest_get_locations($request) {
-    $locations = eme_get_locations();
+// Location endpoints.
+function eme_rest_get_locations( $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Required by WP REST API callback signature.
+	$locations = eme_get_locations();
 
-    if (empty($locations)) {
-        return rest_ensure_response([]);
-    }
+	if ( empty( $locations ) ) {
+		return rest_ensure_response( array() );
+	}
 
-    return rest_ensure_response(array_map('eme_rest_format_location', $locations));
+	return rest_ensure_response( array_map( 'eme_rest_format_location', $locations ) );
 }
 
-function eme_rest_get_location($request) {
-    $location_id = intval($request['id']);
-    $location = eme_get_location($location_id);
+function eme_rest_get_location( $request ) {
+	$location_id = intval( $request['id'] );
+	$location    = eme_get_location( $location_id );
 
-    if (!$location) {
-        return new WP_Error('not_found', 'Location not found', ['status' => 404]);
-    }
+	if ( ! $location ) {
+		return new WP_Error( 'not_found', 'Location not found', array( 'status' => 404 ) );
+	}
 
-    return rest_ensure_response(eme_rest_format_location($location));
+	return rest_ensure_response( eme_rest_format_location( $location ) );
 }
 
-function eme_rest_create_location($request) {
-    $params = $request->get_json_params();
+function eme_rest_create_location( $request ) {
+	$params = $request->get_json_params();
 
-    // Validate required fields
-    if (empty($params['name'])) {
-        return new WP_Error('missing_name', 'Location name is required', ['status' => 400]);
-    }
+	// Validate required fields
+	if ( empty( $params['name'] ) ) {
+		return new WP_Error( 'missing_name', 'Location name is required', array( 'status' => 400 ) );
+	}
 
-    // Check if EME functions are available
-    if (!function_exists('eme_new_location') || !function_exists('eme_insert_location')) {
-        return new WP_Error('eme_not_available', 'Events Made Easy plugin functions not available', ['status' => 500]);
-    }
+	// Check if EME functions are available
+	if ( ! function_exists( 'eme_new_location' ) || ! function_exists( 'eme_insert_location' ) ) {
+		return new WP_Error( 'eme_not_available', 'Events Made Easy plugin functions not available', array( 'status' => 500 ) );
+	}
 
-    // Use EME's native template function
-    $location = eme_new_location();
+	// Use EME's native template function
+	$location = eme_new_location();
 
-    // Map REST API parameters to EME structure
-    $location['location_name'] = sanitize_text_field($params['name']);
-    $location['location_address1'] = isset($params['address']) ? sanitize_text_field($params['address']) : '';
-    $location['location_address2'] = isset($params['address2']) ? sanitize_text_field($params['address2']) : '';
-    $location['location_city'] = isset($params['city']) ? sanitize_text_field($params['city']) : '';
-    $location['location_state'] = isset($params['state']) ? sanitize_text_field($params['state']) : '';
-    $location['location_zip'] = isset($params['zip']) ? sanitize_text_field($params['zip']) : '';
-    $location['location_country'] = isset($params['country']) ? sanitize_text_field($params['country']) : '';
+	// Map REST API parameters to EME structure
+	$location['location_name']     = sanitize_text_field( $params['name'] );
+	$location['location_address1'] = isset( $params['address'] ) ? sanitize_text_field( $params['address'] ) : '';
+	$location['location_address2'] = isset( $params['address2'] ) ? sanitize_text_field( $params['address2'] ) : '';
+	$location['location_city']     = isset( $params['city'] ) ? sanitize_text_field( $params['city'] ) : '';
+	$location['location_state']    = isset( $params['state'] ) ? sanitize_text_field( $params['state'] ) : '';
+	$location['location_zip']      = isset( $params['zip'] ) ? sanitize_text_field( $params['zip'] ) : '';
+	$location['location_country']  = isset( $params['country'] ) ? sanitize_text_field( $params['country'] ) : '';
 
-    // Coordinates are stored as strings in EME
-    $location['location_latitude'] = isset($params['latitude']) ? strval($params['latitude']) : '';
-    $location['location_longitude'] = isset($params['longitude']) ? strval($params['longitude']) : '';
+	// Coordinates are stored as strings in EME
+	$location['location_latitude']  = isset( $params['latitude'] ) ? strval( $params['latitude'] ) : '';
+	$location['location_longitude'] = isset( $params['longitude'] ) ? strval( $params['longitude'] ) : '';
 
-    // Auto-geocode if coordinates not provided but address is
-    if (empty($location['location_latitude']) && empty($location['location_longitude'])) {
-        $coords = eme_rest_geocode_location($location);
-        if ($coords) {
-            $location['location_latitude'] = strval($coords['latitude']);
-            $location['location_longitude'] = strval($coords['longitude']);
-        }
-    }
+	// Auto-geocode if coordinates not provided but address is
+	if ( empty( $location['location_latitude'] ) && empty( $location['location_longitude'] ) ) {
+		$coords = eme_rest_geocode_location( $location );
+		if ( $coords ) {
+			$location['location_latitude']  = strval( $coords['latitude'] );
+			$location['location_longitude'] = strval( $coords['longitude'] );
+		}
+	}
 
-    if (isset($params['description'])) {
-        $location['location_description'] = wp_kses_post($params['description']);
-    }
+	if ( isset( $params['description'] ) ) {
+		$location['location_description'] = wp_kses_post( $params['description'] );
+	}
 
-    // Use EME's native insert function
-    // force=1 bypasses capability check (we've already checked via REST API permission_callback)
-    $location_id = eme_insert_location($location, 1);
+	// Use EME's native insert function
+	// force=1 bypasses capability check (we've already checked via REST API permission_callback)
+	$location_id = eme_insert_location( $location, 1 );
 
-    if (!$location_id) {
-        return new WP_Error('creation_failed', 'Failed to create location', ['status' => 500]);
-    }
+	if ( ! $location_id ) {
+		return new WP_Error( 'creation_failed', 'Failed to create location', array( 'status' => 500 ) );
+	}
 
-    // Get created location using EME's function
-    if (function_exists('eme_get_location')) {
-        $created_location = eme_get_location($location_id);
-    } else {
-        $created_location = ['location_id' => $location_id];
-    }
+	// Get created location using EME's function
+	if ( function_exists( 'eme_get_location' ) ) {
+		$created_location = eme_get_location( $location_id );
+	} else {
+		$created_location = array( 'location_id' => $location_id );
+	}
 
-    return rest_ensure_response([
-        'success' => true,
-        'location_id' => $location_id,
-        'location' => eme_rest_format_location($created_location),
-        'message' => 'Location created successfully',
-    ]);
+	return rest_ensure_response(
+		array(
+			'success'     => true,
+			'location_id' => $location_id,
+			'location'    => eme_rest_format_location( $created_location ),
+			'message'     => 'Location created successfully',
+		)
+	);
 }
 
-function eme_rest_update_location($request) {
-    $location_id = intval($request['id']);
-    $params = $request->get_json_params();
+function eme_rest_update_location( $request ) {
+	$location_id = intval( $request['id'] );
+	$params      = $request->get_json_params();
 
-    // Get existing location using EME's built-in function
-    $location = eme_get_location($location_id);
+	// Get existing location using EME's built-in function
+	$location = eme_get_location( $location_id );
 
-    if (!$location) {
-        return new WP_Error('not_found', 'Location not found', ['status' => 404]);
-    }
+	if ( ! $location ) {
+		return new WP_Error( 'not_found', 'Location not found', array( 'status' => 404 ) );
+	}
 
-    // Update location fields with provided parameters
-    if (isset($params['name'])) {
-        $location['location_name'] = sanitize_text_field($params['name']);
-    }
-    if (isset($params['address'])) {
-        $location['location_address1'] = sanitize_text_field($params['address']);
-    }
-    if (isset($params['address2'])) {
-        $location['location_address2'] = sanitize_text_field($params['address2']);
-    }
-    if (isset($params['city'])) {
-        $location['location_city'] = sanitize_text_field($params['city']);
-    }
-    if (isset($params['state'])) {
-        $location['location_state'] = sanitize_text_field($params['state']);
-    }
-    if (isset($params['zip'])) {
-        $location['location_zip'] = sanitize_text_field($params['zip']);
-    }
-    if (isset($params['country'])) {
-        $location['location_country'] = sanitize_text_field($params['country']);
-    }
-    if (isset($params['latitude'])) {
-        $location['location_latitude'] = strval($params['latitude']);
-    }
-    if (isset($params['longitude'])) {
-        $location['location_longitude'] = strval($params['longitude']);
-    }
-    if (isset($params['description'])) {
-        $location['location_description'] = wp_kses_post($params['description']);
-    }
+	// Update location fields with provided parameters
+	if ( isset( $params['name'] ) ) {
+		$location['location_name'] = sanitize_text_field( $params['name'] );
+	}
+	if ( isset( $params['address'] ) ) {
+		$location['location_address1'] = sanitize_text_field( $params['address'] );
+	}
+	if ( isset( $params['address2'] ) ) {
+		$location['location_address2'] = sanitize_text_field( $params['address2'] );
+	}
+	if ( isset( $params['city'] ) ) {
+		$location['location_city'] = sanitize_text_field( $params['city'] );
+	}
+	if ( isset( $params['state'] ) ) {
+		$location['location_state'] = sanitize_text_field( $params['state'] );
+	}
+	if ( isset( $params['zip'] ) ) {
+		$location['location_zip'] = sanitize_text_field( $params['zip'] );
+	}
+	if ( isset( $params['country'] ) ) {
+		$location['location_country'] = sanitize_text_field( $params['country'] );
+	}
+	if ( isset( $params['latitude'] ) ) {
+		$location['location_latitude'] = strval( $params['latitude'] );
+	}
+	if ( isset( $params['longitude'] ) ) {
+		$location['location_longitude'] = strval( $params['longitude'] );
+	}
+	if ( isset( $params['description'] ) ) {
+		$location['location_description'] = wp_kses_post( $params['description'] );
+	}
 
-    // Auto-geocode if address fields were updated but coordinates weren't provided
-    $address_fields_updated = isset($params['address']) || isset($params['address2']) ||
-                             isset($params['city']) || isset($params['state']) ||
-                             isset($params['zip']) || isset($params['country']);
-    $coords_provided = isset($params['latitude']) || isset($params['longitude']);
+	// Auto-geocode if address fields were updated but coordinates weren't provided
+	$address_fields_updated = isset( $params['address'] ) || isset( $params['address2'] ) ||
+							isset( $params['city'] ) || isset( $params['state'] ) ||
+							isset( $params['zip'] ) || isset( $params['country'] );
+	$coords_provided        = isset( $params['latitude'] ) || isset( $params['longitude'] );
 
-    if ($address_fields_updated && !$coords_provided) {
-        $coords = eme_rest_geocode_location($location);
-        if ($coords) {
-            $location['location_latitude'] = strval($coords['latitude']);
-            $location['location_longitude'] = strval($coords['longitude']);
-        }
-    }
+	if ( $address_fields_updated && ! $coords_provided ) {
+		$coords = eme_rest_geocode_location( $location );
+		if ( $coords ) {
+			$location['location_latitude']  = strval( $coords['latitude'] );
+			$location['location_longitude'] = strval( $coords['longitude'] );
+		}
+	}
 
-    // Update location using EME's built-in function
-    // Note: eme_update_location may return location_id on success, 0/false on failure
-    $result = eme_update_location($location, $location_id);
+	// Update location using EME's built-in function
+	// Note: eme_update_location may return location_id on success, 0/false on failure
+	$result = eme_update_location( $location, $location_id );
 
-    // Get updated location (regardless of return value, as EME functions vary)
-    $updated_location = eme_get_location($location_id);
+	// Get updated location (regardless of return value, as EME functions vary)
+	$updated_location = eme_get_location( $location_id );
 
-    if (!$updated_location) {
-        return new WP_Error('update_failed', 'Failed to update location', ['status' => 500]);
-    }
+	if ( ! $updated_location ) {
+		return new WP_Error( 'update_failed', 'Failed to update location', array( 'status' => 500 ) );
+	}
 
-    return rest_ensure_response([
-        'success' => true,
-        'location' => eme_rest_format_location($updated_location),
-        'message' => 'Location updated successfully',
-    ]);
+	return rest_ensure_response(
+		array(
+			'success'  => true,
+			'location' => eme_rest_format_location( $updated_location ),
+			'message'  => 'Location updated successfully',
+		)
+	);
 }
 
-// Category endpoints
-function eme_rest_get_categories($request) {
-    $categories = eme_get_categories();
+// Category endpoints.
+function eme_rest_get_categories( $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Required by WP REST API callback signature.
+	$categories = eme_get_categories();
 
-    if (empty($categories)) {
-        return rest_ensure_response([]);
-    }
+	if ( empty( $categories ) ) {
+		return rest_ensure_response( array() );
+	}
 
-    return rest_ensure_response(array_map('eme_rest_format_category', $categories));
+	return rest_ensure_response( array_map( 'eme_rest_format_category', $categories ) );
 }
 
-function eme_rest_create_category($request) {
-    $params = $request->get_json_params();
+function eme_rest_create_category( $request ) {
+	$params = $request->get_json_params();
 
-    // Validate required fields
-    if (empty($params['name'])) {
-        return new WP_Error('missing_name', 'Category name is required', ['status' => 400]);
-    }
+	// Validate required fields
+	if ( empty( $params['name'] ) ) {
+		return new WP_Error( 'missing_name', 'Category name is required', array( 'status' => 400 ) );
+	}
 
-    global $wpdb;
-    $table = $wpdb->prefix . 'eme_categories';
+	global $wpdb;
+	$table = $wpdb->prefix . 'eme_categories';
 
-    $category_slug = isset($params['slug'])
-        ? sanitize_title($params['slug'])
-        : sanitize_title($params['name']);
+	$category_slug = isset( $params['slug'] )
+		? sanitize_title( $params['slug'] )
+		: sanitize_title( $params['name'] );
 
-    // Insert category
-    $result = $wpdb->insert($table, [
-        'category_name' => sanitize_text_field($params['name']),
-        'category_slug' => $category_slug,
-    ]);
+	// Insert category
+	$result = $wpdb->insert(
+		$table,
+		array(
+			'category_name' => sanitize_text_field( $params['name'] ),
+			'category_slug' => $category_slug,
+		)
+	);
 
-    if (!$result) {
-        return new WP_Error('creation_failed', 'Failed to create category', ['status' => 500]);
-    }
+	if ( ! $result ) {
+		return new WP_Error( 'creation_failed', 'Failed to create category', array( 'status' => 500 ) );
+	}
 
-    $category_id = $wpdb->insert_id;
+	$category_id = $wpdb->insert_id;
 
-    return rest_ensure_response([
-        'success' => true,
-        'category_id' => $category_id,
-        'category' => [
-            'id' => $category_id,
-            'name' => $params['name'],
-            'slug' => $category_slug,
-        ],
-        'message' => 'Category created successfully',
-    ]);
+	return rest_ensure_response(
+		array(
+			'success'     => true,
+			'category_id' => $category_id,
+			'category'    => array(
+				'id'   => $category_id,
+				'name' => $params['name'],
+				'slug' => $category_slug,
+			),
+			'message'     => 'Category created successfully',
+		)
+	);
 }
 
 // Formatting functions
-function eme_rest_format_event($event) {
-    // Build event URL manually to avoid slow eme_event_url() function
-    $event_url = '';
-    if (!empty($event['event_url'])) {
-        $event_url = esc_url($event['event_url']);
-    } elseif (!empty($event['event_slug'])) {
-        $event_url = home_url('/events/' . $event['event_slug'] . '/');
-    } else {
-        $event_url = home_url('/?event_id=' . $event['event_id']);
-    }
+function eme_rest_format_event( $event ) {
+	// Build event URL manually to avoid slow eme_event_url() function
+	$event_url = '';
+	if ( ! empty( $event['event_url'] ) ) {
+		$event_url = esc_url( $event['event_url'] );
+	} elseif ( ! empty( $event['event_slug'] ) ) {
+		$event_url = home_url( '/events/' . $event['event_slug'] . '/' );
+	} else {
+		$event_url = home_url( '/?event_id=' . $event['event_id'] );
+	}
 
-    $formatted = [
-        'id' => intval($event['event_id']),
-        'title' => $event['event_name'],
-        'description' => $event['event_notes'],
-        'start_date' => $event['event_start'],
-        'end_date' => $event['event_end'],
-        'status' => eme_rest_format_status($event['event_status']),
-        'slug' => $event['event_slug'],
-        'url' => $event_url,
-        'location_id' => intval($event['location_id']),
-        'category_ids' => !empty($event['event_category_ids'])
-            ? array_map('intval', explode(',', $event['event_category_ids']))
-            : [],
-        'rsvp_enabled' => (bool)$event['event_rsvp'],
-        'seats' => $event['event_seats'],
-        'price' => $event['price'],
-        'currency' => $event['currency'],
-        'image_id' => intval($event['event_image_id']),
-        'image_url' => $event['event_image_url'],
-        'contact_person_id' => intval($event['event_contactperson_id']),
-        'created_date' => $event['creation_date'],
-        'modified_date' => $event['modif_date'],
-    ];
+	$formatted = array(
+		'id'                => intval( $event['event_id'] ),
+		'title'             => $event['event_name'],
+		'description'       => $event['event_notes'],
+		'start_date'        => $event['event_start'],
+		'end_date'          => $event['event_end'],
+		'status'            => eme_rest_format_status( $event['event_status'] ),
+		'slug'              => $event['event_slug'],
+		'url'               => $event_url,
+		'location_id'       => intval( $event['location_id'] ),
+		'category_ids'      => ! empty( $event['event_category_ids'] )
+			? array_map( 'intval', explode( ',', $event['event_category_ids'] ) )
+			: array(),
+		'rsvp_enabled'      => (bool) $event['event_rsvp'],
+		'seats'             => $event['event_seats'],
+		'price'             => $event['price'],
+		'currency'          => $event['currency'],
+		'image_id'          => intval( $event['event_image_id'] ),
+		'image_url'         => $event['event_image_url'],
+		'contact_person_id' => intval( $event['event_contactperson_id'] ),
+		'created_date'      => $event['creation_date'],
+		'modified_date'     => $event['modif_date'],
+	);
 
-    // Skip location lookup to avoid slow eme_get_location() function
-    // Clients can fetch location separately if needed via /locations/{id}
+	// Skip location lookup to avoid slow eme_get_location() function
+	// Clients can fetch location separately if needed via /locations/{id}
 
-    return $formatted;
+	return $formatted;
 }
 
-function eme_rest_format_location($location) {
-    // EME stores address in location_address1 and location_address2
-    // but may also have a computed location_address field
-    $address = '';
-    if (isset($location['location_address']) && !empty($location['location_address'])) {
-        $address = $location['location_address'];
-    } elseif (isset($location['location_address1'])) {
-        $address = trim($location['location_address1']);
-        if (isset($location['location_address2']) && !empty($location['location_address2'])) {
-            $address .= ($address ? ' ' : '') . trim($location['location_address2']);
-        }
-    }
+function eme_rest_format_location( $location ) {
+	// EME stores address in location_address1 and location_address2
+	// but may also have a computed location_address field
+	$address = '';
+	if ( isset( $location['location_address'] ) && ! empty( $location['location_address'] ) ) {
+		$address = $location['location_address'];
+	} elseif ( isset( $location['location_address1'] ) ) {
+		$address = trim( $location['location_address1'] );
+		if ( isset( $location['location_address2'] ) && ! empty( $location['location_address2'] ) ) {
+			$address .= ( $address ? ' ' : '' ) . trim( $location['location_address2'] );
+		}
+	}
 
-    return [
-        'id' => intval($location['location_id']),
-        'name' => $location['location_name'],
-        'address' => $address,
-        'city' => $location['location_city'],
-        'state' => $location['location_state'],
-        'zip' => $location['location_zip'],
-        'country' => $location['location_country'],
-        'latitude' => isset($location['location_latitude']) ? $location['location_latitude'] : '',
-        'longitude' => isset($location['location_longitude']) ? $location['location_longitude'] : '',
-    ];
+	return array(
+		'id'        => intval( $location['location_id'] ),
+		'name'      => $location['location_name'],
+		'address'   => $address,
+		'city'      => $location['location_city'],
+		'state'     => $location['location_state'],
+		'zip'       => $location['location_zip'],
+		'country'   => $location['location_country'],
+		'latitude'  => isset( $location['location_latitude'] ) ? $location['location_latitude'] : '',
+		'longitude' => isset( $location['location_longitude'] ) ? $location['location_longitude'] : '',
+	);
 }
 
-function eme_rest_format_category($category) {
-    return [
-        'id' => intval($category['category_id']),
-        'name' => $category['category_name'],
-        'slug' => $category['category_slug'],
-    ];
+function eme_rest_format_category( $category ) {
+	return array(
+		'id'   => intval( $category['category_id'] ),
+		'name' => $category['category_name'],
+		'slug' => $category['category_slug'],
+	);
 }
 
-// Recurrence endpoints
-function eme_rest_get_recurrences($request) {
-    global $wpdb;
-    $table = $wpdb->prefix . 'eme_events';
+// Recurrence endpoints.
+function eme_rest_get_recurrences( $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Required by WP REST API callback signature.
+	global $wpdb;
+	$table = $wpdb->prefix . 'eme_events';
 
-    // Get all events that are recurring templates (events that have child recurring instances)
-    // These are events where other events have this event's ID as their recurrence_id
-    $sql = "
-        SELECT DISTINCT e.*
-        FROM {$table} e
-        INNER JOIN {$table} children ON children.recurrence_id = e.event_id
-        WHERE e.recurrence IS NULL OR e.recurrence = 0
-        ORDER BY e.event_start DESC
-    ";
+	// Get all events that are recurring templates (events that have child recurring instances)
+	// These are events where other events have this event's ID as their recurrence_id
+	// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from $wpdb->prefix, no user input.
+	$recurring_events = $wpdb->get_results(
+		"SELECT DISTINCT e.*
+		FROM {$table} e
+		INNER JOIN {$table} children ON children.recurrence_id = e.event_id
+		WHERE e.recurrence IS NULL OR e.recurrence = 0
+		ORDER BY e.event_start DESC",
+		ARRAY_A
+	);
+	// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
-    $recurring_events = $wpdb->get_results($sql, ARRAY_A);
+	if ( empty( $recurring_events ) ) {
+		return rest_ensure_response( array() );
+	}
 
-    if (empty($recurring_events)) {
-        return rest_ensure_response([]);
-    }
+	// Format recurring events for REST response
+	$formatted_events = array_map( 'eme_rest_format_event', $recurring_events );
 
-    // Format recurring events for REST response
-    $formatted_events = array_map('eme_rest_format_event', $recurring_events);
-
-    return rest_ensure_response($formatted_events);
+	return rest_ensure_response( $formatted_events );
 }
 
-function eme_rest_create_recurrence($request) {
-    $params = $request->get_json_params();
+function eme_rest_create_recurrence( $request ) {
+	$params = $request->get_json_params();
 
-    // Validate required fields
-    if (empty($params['title'])) {
-        return new WP_Error('missing_title', 'Event title is required', ['status' => 400]);
-    }
-    if (empty($params['recurrence'])) {
-        return new WP_Error('missing_recurrence', 'Recurrence pattern is required', ['status' => 400]);
-    }
+	// Validate required fields
+	if ( empty( $params['title'] ) ) {
+		return new WP_Error( 'missing_title', 'Event title is required', array( 'status' => 400 ) );
+	}
+	if ( empty( $params['recurrence'] ) ) {
+		return new WP_Error( 'missing_recurrence', 'Recurrence pattern is required', array( 'status' => 400 ) );
+	}
 
-    $recurrence = $params['recurrence'];
+	$recurrence = $params['recurrence'];
 
-    // Validate recurrence pattern
-    $validation = eme_rest_validate_recurrence($recurrence);
-    if (is_wp_error($validation)) {
-        return $validation;
-    }
+	// Validate recurrence pattern
+	$validation = eme_rest_validate_recurrence( $recurrence );
+	if ( is_wp_error( $validation ) ) {
+		return $validation;
+	}
 
-    // Parse recurrence data
-    $recurrence_data = eme_rest_parse_recurrence($recurrence);
+	// Parse recurrence data
+	$recurrence_data = eme_rest_parse_recurrence( $recurrence );
 
-    // Create recurrence pattern
-    global $wpdb;
-    $recurrence_table = $wpdb->prefix . 'eme_recurrence';
+	// Create recurrence pattern
+	global $wpdb;
+	$recurrence_table = $wpdb->prefix . 'eme_recurrence';
 
-    $result = $wpdb->insert($recurrence_table, $recurrence_data);
+	$result = $wpdb->insert( $recurrence_table, $recurrence_data );
 
-    if (!$result) {
-        return new WP_Error('creation_failed', 'Failed to create recurrence pattern', ['status' => 500]);
-    }
+	if ( ! $result ) {
+		return new WP_Error( 'creation_failed', 'Failed to create recurrence pattern', array( 'status' => 500 ) );
+	}
 
-    $recurrence_id = $wpdb->insert_id;
+	$recurrence_id = $wpdb->insert_id;
 
-    // Create event with recurrence_id
-    $event = eme_new_event();
-    $event['event_properties'] = eme_init_event_props([], 1);
+	// Create event with recurrence_id
+	$event                     = eme_new_event();
+	$event['event_properties'] = eme_init_event_props( array(), 1 );
 
-    // Set event details
-    $event['event_name'] = sanitize_text_field($params['title']);
-    $event['event_notes'] = isset($params['description']) ? wp_kses_post($params['description']) : '';
-    // Set event status (defaults to draft if not specified)
-    $event['event_status'] = isset($params['status']) ? eme_rest_map_status($params['status']) : 5;
-    $event['event_author'] = get_current_user_id();
-    $event['recurrence_id'] = $recurrence_id;
+	// Set event details
+	$event['event_name']  = sanitize_text_field( $params['title'] );
+	$event['event_notes'] = isset( $params['description'] ) ? wp_kses_post( $params['description'] ) : '';
+	// Set event status (defaults to draft if not specified)
+	$event['event_status']  = isset( $params['status'] ) ? eme_rest_map_status( $params['status'] ) : 5;
+	$event['event_author']  = get_current_user_id();
+	$event['recurrence_id'] = $recurrence_id;
 
-    // Optional fields
-    if (isset($params['location_id'])) {
-        $event['location_id'] = intval($params['location_id']);
-    }
-    if (isset($params['category_ids'])) {
-        $event['event_category_ids'] = is_array($params['category_ids'])
-            ? implode(',', array_map('intval', $params['category_ids']))
-            : sanitize_text_field($params['category_ids']);
-    }
-    if (isset($params['rsvp'])) {
-        $event['event_rsvp'] = (bool)$params['rsvp'] ? 1 : 0;
-    }
-    if (isset($params['seats'])) {
-        $event['event_seats'] = intval($params['seats']);
-    }
-    if (isset($params['price'])) {
-        $event['price'] = sanitize_text_field($params['price']);
-    }
-    if (isset($params['currency'])) {
-        $event['currency'] = sanitize_text_field($params['currency']);
-    }
-    if (isset($params['image_id'])) {
-        $event['event_image_id'] = intval($params['image_id']);
-        $event['event_image_url'] = wp_get_attachment_url($event['event_image_id']);
-    }
+	// Optional fields
+	if ( isset( $params['location_id'] ) ) {
+		$event['location_id'] = intval( $params['location_id'] );
+	}
+	if ( isset( $params['category_ids'] ) ) {
+		$event['event_category_ids'] = is_array( $params['category_ids'] )
+			? implode( ',', array_map( 'intval', $params['category_ids'] ) )
+			: sanitize_text_field( $params['category_ids'] );
+	}
+	if ( isset( $params['rsvp'] ) ) {
+		$event['event_rsvp'] = (bool) $params['rsvp'] ? 1 : 0;
+	}
+	if ( isset( $params['seats'] ) ) {
+		$event['event_seats'] = intval( $params['seats'] );
+	}
+	if ( isset( $params['price'] ) ) {
+		$event['price'] = sanitize_text_field( $params['price'] );
+	}
+	if ( isset( $params['currency'] ) ) {
+		$event['currency'] = sanitize_text_field( $params['currency'] );
+	}
+	if ( isset( $params['image_id'] ) ) {
+		$event['event_image_id']  = intval( $params['image_id'] );
+		$event['event_image_url'] = wp_get_attachment_url( $event['event_image_id'] );
+	}
 
-    // Insert event
-    $event_id = eme_db_insert_event($event);
+	// Insert event
+	$event_id = eme_db_insert_event( $event );
 
-    if (!$event_id) {
-        // Rollback: delete recurrence
-        $wpdb->delete($recurrence_table, ['recurrence_id' => $recurrence_id]);
-        return new WP_Error('creation_failed', 'Failed to create recurring event', ['status' => 500]);
-    }
+	if ( ! $event_id ) {
+		// Rollback: delete recurrence
+		$wpdb->delete( $recurrence_table, array( 'recurrence_id' => $recurrence_id ) );
+		return new WP_Error( 'creation_failed', 'Failed to create recurring event', array( 'status' => 500 ) );
+	}
 
-    return rest_ensure_response([
-        'success' => true,
-        'event_id' => $event_id,
-        'recurrence_id' => $recurrence_id,
-        'recurrence_pattern' => eme_rest_format_recurrence($recurrence_data),
-        'message' => 'Recurring event created successfully',
-    ]);
+	return rest_ensure_response(
+		array(
+			'success'            => true,
+			'event_id'           => $event_id,
+			'recurrence_id'      => $recurrence_id,
+			'recurrence_pattern' => eme_rest_format_recurrence( $recurrence_data ),
+			'message'            => 'Recurring event created successfully',
+		)
+	);
 }
 
-function eme_rest_get_recurrence($request) {
-    $recurrence_id = intval($request['id']);
+function eme_rest_get_recurrence( $request ) {
+	$recurrence_id = intval( $request['id'] );
 
-    global $wpdb;
-    $table = $wpdb->prefix . 'eme_recurrence';
+	global $wpdb;
+	$table = $wpdb->prefix . 'eme_recurrence';
 
-    $recurrence = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM $table WHERE recurrence_id = %d",
-        $recurrence_id
-    ), ARRAY_A);
+	$recurrence = $wpdb->get_row(
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from $wpdb->prefix.
+		$wpdb->prepare( "SELECT * FROM $table WHERE recurrence_id = %d", $recurrence_id ),
+		ARRAY_A
+	);
 
-    if (!$recurrence) {
-        return new WP_Error('not_found', 'Recurrence pattern not found', ['status' => 404]);
-    }
+	if ( ! $recurrence ) {
+		return new WP_Error( 'not_found', 'Recurrence pattern not found', array( 'status' => 404 ) );
+	}
 
-    return rest_ensure_response(eme_rest_format_recurrence($recurrence));
+	return rest_ensure_response( eme_rest_format_recurrence( $recurrence ) );
 }
 
-function eme_rest_delete_recurrence($request) {
-    $recurrence_id = intval($request['id']);
+function eme_rest_delete_recurrence( $request ) {
+	$recurrence_id = intval( $request['id'] );
 
-    // Check if recurrence exists
-    global $wpdb;
-    $recurrence_table = $wpdb->prefix . 'eme_recurrence';
+	// Check if recurrence exists.
+	global $wpdb;
+	$recurrence_table = $wpdb->prefix . 'eme_recurrence';
 
-    $recurrence = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM $recurrence_table WHERE recurrence_id = %d",
-        $recurrence_id
-    ), ARRAY_A);
+	$recurrence = $wpdb->get_row(
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from $wpdb->prefix.
+		$wpdb->prepare( "SELECT * FROM $recurrence_table WHERE recurrence_id = %d", $recurrence_id ),
+		ARRAY_A
+	);
 
-    if (!$recurrence) {
-        return new WP_Error('not_found', 'Recurrence pattern not found', ['status' => 404]);
-    }
+	if ( ! $recurrence ) {
+		return new WP_Error( 'not_found', 'Recurrence pattern not found', array( 'status' => 404 ) );
+	}
 
-    // Delete associated events
-    $events_table = $wpdb->prefix . 'eme_events';
-    $wpdb->delete($events_table, ['recurrence_id' => $recurrence_id]);
+	// Delete associated events
+	$events_table = $wpdb->prefix . 'eme_events';
+	$wpdb->delete( $events_table, array( 'recurrence_id' => $recurrence_id ) );
 
-    // Delete recurrence
-    $wpdb->delete($recurrence_table, ['recurrence_id' => $recurrence_id]);
+	// Delete recurrence
+	$wpdb->delete( $recurrence_table, array( 'recurrence_id' => $recurrence_id ) );
 
-    return rest_ensure_response([
-        'success' => true,
-        'message' => 'Recurrence pattern and associated events deleted successfully',
-    ]);
+	return rest_ensure_response(
+		array(
+			'success' => true,
+			'message' => 'Recurrence pattern and associated events deleted successfully',
+		)
+	);
 }
 
-function eme_rest_get_recurrence_instances($request) {
-    $recurrence_id = intval($request['id']);
+function eme_rest_get_recurrence_instances( $request ) {
+	$recurrence_id = intval( $request['id'] );
 
-    // Optional date range parameters
-    $start_date = isset($request['start_date']) ? sanitize_text_field($request['start_date']) : date('Y-m-d');
-    $end_date = isset($request['end_date']) ? sanitize_text_field($request['end_date']) : date('Y-m-d', strtotime('+1 year'));
+	// Optional date range parameters
+	$start_date = isset( $request['start_date'] ) ? sanitize_text_field( $request['start_date'] ) : gmdate( 'Y-m-d' );
+	$end_date   = isset( $request['end_date'] ) ? sanitize_text_field( $request['end_date'] ) : gmdate( 'Y-m-d', strtotime( '+1 year' ) );
 
-    // Get recurrence pattern
-    global $wpdb;
-    $table = $wpdb->prefix . 'eme_recurrence';
+	// Get recurrence pattern
+	global $wpdb;
+	$table = $wpdb->prefix . 'eme_recurrence';
 
-    $recurrence = $wpdb->get_row($wpdb->prepare(
-        "SELECT * FROM $table WHERE recurrence_id = %d",
-        $recurrence_id
-    ), ARRAY_A);
+	$recurrence = $wpdb->get_row(
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from $wpdb->prefix.
+		$wpdb->prepare( "SELECT * FROM $table WHERE recurrence_id = %d", $recurrence_id ),
+		ARRAY_A
+	);
 
-    if (!$recurrence) {
-        return new WP_Error('not_found', 'Recurrence pattern not found', ['status' => 404]);
-    }
+	if ( ! $recurrence ) {
+		return new WP_Error( 'not_found', 'Recurrence pattern not found', array( 'status' => 404 ) );
+	}
 
-    // Calculate instances using EME's built-in function
-    if (function_exists('eme_get_recurrence_events')) {
-        $instances = eme_get_recurrence_events($recurrence_id, $start_date, $end_date);
-    } else {
-        // Fallback: calculate manually
-        $instances = eme_rest_calculate_instances($recurrence, $start_date, $end_date);
-    }
+	// Calculate instances using EME's built-in function.
+	if ( function_exists( 'eme_get_recurrence_events' ) ) {
+		$instances = eme_get_recurrence_events( $recurrence_id, $start_date, $end_date );
+	} else {
+		// Fallback: calculate manually
+		$instances = eme_rest_calculate_instances( $recurrence, $start_date, $end_date );
+	}
 
-    return rest_ensure_response([
-        'recurrence_id' => $recurrence_id,
-        'pattern' => eme_rest_format_recurrence($recurrence),
-        'instances' => $instances,
-        'count' => count($instances),
-    ]);
+	return rest_ensure_response(
+		array(
+			'recurrence_id' => $recurrence_id,
+			'pattern'       => eme_rest_format_recurrence( $recurrence ),
+			'instances'     => $instances,
+			'count'         => count( $instances ),
+		)
+	);
 }
 
 // Helper functions
-function eme_rest_validate_recurrence($recurrence) {
-    // Validate frequency
-    $valid_frequencies = ['weekly', 'monthly', 'specific'];
-    if (empty($recurrence['frequency']) || !in_array($recurrence['frequency'], $valid_frequencies)) {
-        return new WP_Error('invalid_frequency', 'Frequency must be one of: weekly, monthly, specific', ['status' => 400]);
-    }
+function eme_rest_validate_recurrence( $recurrence ) {
+	// Validate frequency
+	$valid_frequencies = array( 'weekly', 'monthly', 'specific' );
+	if ( empty( $recurrence['frequency'] ) || ! in_array( $recurrence['frequency'], $valid_frequencies, true ) ) {
+		return new WP_Error( 'invalid_frequency', 'Frequency must be one of: weekly, monthly, specific', array( 'status' => 400 ) );
+	}
 
-    // Validate dates for weekly/monthly
-    if (in_array($recurrence['frequency'], ['weekly', 'monthly'])) {
-        if (empty($recurrence['start_date'])) {
-            return new WP_Error('missing_start_date', 'Start date is required', ['status' => 400]);
-        }
-        if (empty($recurrence['end_date'])) {
-            return new WP_Error('missing_end_date', 'End date is required', ['status' => 400]);
-        }
-    }
+	// Validate dates for weekly/monthly
+	if ( in_array( $recurrence['frequency'], array( 'weekly', 'monthly' ), true ) ) {
+		if ( empty( $recurrence['start_date'] ) ) {
+			return new WP_Error( 'missing_start_date', 'Start date is required', array( 'status' => 400 ) );
+		}
+		if ( empty( $recurrence['end_date'] ) ) {
+			return new WP_Error( 'missing_end_date', 'End date is required', array( 'status' => 400 ) );
+		}
+	}
 
-    // Validate interval
-    if (isset($recurrence['interval']) && $recurrence['interval'] < 1) {
-        return new WP_Error('invalid_interval', 'Interval must be >= 1', ['status' => 400]);
-    }
+	// Validate interval
+	if ( isset( $recurrence['interval'] ) && $recurrence['interval'] < 1 ) {
+		return new WP_Error( 'invalid_interval', 'Interval must be >= 1', array( 'status' => 400 ) );
+	}
 
-    // Validate weekly pattern
-    if ($recurrence['frequency'] === 'weekly') {
-        if (empty($recurrence['days_of_week'])) {
-            return new WP_Error('missing_days', 'Days of week are required for weekly recurrence', ['status' => 400]);
-        }
-    }
+	// Validate weekly pattern
+	if ( 'weekly' === $recurrence['frequency'] ) {
+		if ( empty( $recurrence['days_of_week'] ) ) {
+			return new WP_Error( 'missing_days', 'Days of week are required for weekly recurrence', array( 'status' => 400 ) );
+		}
+	}
 
-    // Validate monthly pattern
-    if ($recurrence['frequency'] === 'monthly') {
-        if (empty($recurrence['day_of_week']) || !isset($recurrence['week_of_month'])) {
-            return new WP_Error('missing_monthly_pattern', 'Day of week and week of month are required', ['status' => 400]);
-        }
-    }
+	// Validate monthly pattern.
+	if ( 'monthly' === $recurrence['frequency'] ) {
+		if ( empty( $recurrence['day_of_week'] ) || ! isset( $recurrence['week_of_month'] ) ) {
+			return new WP_Error( 'missing_monthly_pattern', 'Day of week and week of month are required', array( 'status' => 400 ) );
+		}
+	}
 
-    // Validate specific days
-    if ($recurrence['frequency'] === 'specific') {
-        if (empty($recurrence['dates'])) {
-            return new WP_Error('missing_dates', 'Specific dates are required', ['status' => 400]);
-        }
-    }
+	// Validate specific days
+	if ( 'specific' === $recurrence['frequency'] ) {
+		if ( empty( $recurrence['dates'] ) ) {
+			return new WP_Error( 'missing_dates', 'Specific dates are required', array( 'status' => 400 ) );
+		}
+	}
 
-    return true;
+	return true;
 }
 
-function eme_rest_parse_recurrence($recurrence) {
-    $data = [
-        'recurrence_freq' => $recurrence['frequency'],
-        'recurrence_interval' => isset($recurrence['interval']) ? intval($recurrence['interval']) : 1,
-    ];
+function eme_rest_parse_recurrence( $recurrence ) {
+	$data = array(
+		'recurrence_freq'     => $recurrence['frequency'],
+		'recurrence_interval' => isset( $recurrence['interval'] ) ? intval( $recurrence['interval'] ) : 1,
+	);
 
-    // Parse based on frequency type
-    if ($recurrence['frequency'] === 'weekly') {
-        $data['recurrence_start_date'] = sanitize_text_field($recurrence['start_date']);
-        $data['recurrence_end_date'] = sanitize_text_field($recurrence['end_date']);
+	// Parse based on frequency type
+	if ( 'weekly' === $recurrence['frequency'] ) {
+		$data['recurrence_start_date'] = sanitize_text_field( $recurrence['start_date'] );
+		$data['recurrence_end_date']   = sanitize_text_field( $recurrence['end_date'] );
 
-        // Convert day names to day codes (0=Sun, 1=Mon, etc.)
-        $day_map = [
-            'sunday' => 0, 'monday' => 1, 'tuesday' => 2, 'wednesday' => 3,
-            'thursday' => 4, 'friday' => 5, 'saturday' => 6
-        ];
+		// Convert day names to day codes (0=Sun, 1=Mon, etc.)
+		$day_map = array(
+			'sunday'    => 0,
+			'monday'    => 1,
+			'tuesday'   => 2,
+			'wednesday' => 3,
+			'thursday'  => 4,
+			'friday'    => 5,
+			'saturday'  => 6,
+		);
 
-        $days = is_array($recurrence['days_of_week']) ? $recurrence['days_of_week'] : explode(',', $recurrence['days_of_week']);
-        $day_codes = [];
-        foreach ($days as $day) {
-            $day = strtolower(trim($day));
-            if (isset($day_map[$day])) {
-                $day_codes[] = $day_map[$day];
-            }
-        }
-        $data['recurrence_byday'] = implode(',', $day_codes);
+		$days      = is_array( $recurrence['days_of_week'] ) ? $recurrence['days_of_week'] : explode( ',', $recurrence['days_of_week'] );
+		$day_codes = array();
+		foreach ( $days as $day ) {
+			$day = strtolower( trim( $day ) );
+			if ( isset( $day_map[ $day ] ) ) {
+				$day_codes[] = $day_map[ $day ];
+			}
+		}
+		$data['recurrence_byday'] = implode( ',', $day_codes );
 
-        // Duration and start time
-        $data['event_duration'] = isset($recurrence['duration']) ? intval($recurrence['duration']) : 3600;
+		// Duration and start time
+		$data['event_duration'] = isset( $recurrence['duration'] ) ? intval( $recurrence['duration'] ) : 3600;
 
-    } elseif ($recurrence['frequency'] === 'monthly') {
-        $data['recurrence_start_date'] = sanitize_text_field($recurrence['start_date']);
-        $data['recurrence_end_date'] = sanitize_text_field($recurrence['end_date']);
+	} elseif ( 'monthly' === $recurrence['frequency'] ) {
+		$data['recurrence_start_date'] = sanitize_text_field( $recurrence['start_date'] );
+		$data['recurrence_end_date']   = sanitize_text_field( $recurrence['end_date'] );
 
-        // Week of month (1-5, or -1 for last)
-        $data['recurrence_byweekno'] = intval($recurrence['week_of_month']);
+		// Week of month (1-5, or -1 for last)
+		$data['recurrence_byweekno'] = intval( $recurrence['week_of_month'] );
 
-        // Day of week
-        $day_map = ['sunday' => 0, 'monday' => 1, 'tuesday' => 2, 'wednesday' => 3, 'thursday' => 4, 'friday' => 5, 'saturday' => 6];
-        $day = strtolower(trim($recurrence['day_of_week']));
-        $data['recurrence_byday'] = isset($day_map[$day]) ? $day_map[$day] : 1;
+		// Day of week
+		$day_map                  = array(
+			'sunday'    => 0,
+			'monday'    => 1,
+			'tuesday'   => 2,
+			'wednesday' => 3,
+			'thursday'  => 4,
+			'friday'    => 5,
+			'saturday'  => 6,
+		);
+		$day                      = strtolower( trim( $recurrence['day_of_week'] ) );
+		$data['recurrence_byday'] = isset( $day_map[ $day ] ) ? $day_map[ $day ] : 1;
 
-        $data['event_duration'] = isset($recurrence['duration']) ? intval($recurrence['duration']) : 3600;
+		$data['event_duration'] = isset( $recurrence['duration'] ) ? intval( $recurrence['duration'] ) : 3600;
 
-    } elseif ($recurrence['frequency'] === 'specific') {
-        // Specific dates
-        $dates = is_array($recurrence['dates']) ? $recurrence['dates'] : explode(',', $recurrence['dates']);
-        $data['specific_days'] = implode(',', array_map('sanitize_text_field', $dates));
+	} elseif ( 'specific' === $recurrence['frequency'] ) {
+		// Specific dates
+		$dates                 = is_array( $recurrence['dates'] ) ? $recurrence['dates'] : explode( ',', $recurrence['dates'] );
+		$data['specific_days'] = implode( ',', array_map( 'sanitize_text_field', $dates ) );
 
-        $data['event_duration'] = isset($recurrence['duration']) ? intval($recurrence['duration']) : 3600;
-    }
+		$data['event_duration'] = isset( $recurrence['duration'] ) ? intval( $recurrence['duration'] ) : 3600;
+	}
 
-    // Exclude days (optional)
-    if (isset($recurrence['exclude_days'])) {
-        $exclude = is_array($recurrence['exclude_days']) ? $recurrence['exclude_days'] : explode(',', $recurrence['exclude_days']);
-        $data['exclude_days'] = implode(',', array_map('sanitize_text_field', $exclude));
-    }
+	// Exclude days (optional)
+	if ( isset( $recurrence['exclude_days'] ) ) {
+		$exclude              = is_array( $recurrence['exclude_days'] ) ? $recurrence['exclude_days'] : explode( ',', $recurrence['exclude_days'] );
+		$data['exclude_days'] = implode( ',', array_map( 'sanitize_text_field', $exclude ) );
+	}
 
-    return $data;
+	return $data;
 }
 
-function eme_rest_format_recurrence($recurrence) {
-    $formatted = [
-        'id' => intval($recurrence['recurrence_id']),
-        'frequency' => $recurrence['recurrence_freq'],
-        'interval' => intval($recurrence['recurrence_interval']),
-        'duration' => intval($recurrence['event_duration']),
-    ];
+function eme_rest_format_recurrence( $recurrence ) {
+	$formatted = array(
+		'id'        => intval( $recurrence['recurrence_id'] ),
+		'frequency' => $recurrence['recurrence_freq'],
+		'interval'  => intval( $recurrence['recurrence_interval'] ),
+		'duration'  => intval( $recurrence['event_duration'] ),
+	);
 
-    if (isset($recurrence['recurrence_start_date'])) {
-        $formatted['start_date'] = $recurrence['recurrence_start_date'];
-    }
-    if (isset($recurrence['recurrence_end_date'])) {
-        $formatted['end_date'] = $recurrence['recurrence_end_date'];
-    }
-    if (isset($recurrence['recurrence_byday'])) {
-        $formatted['days_of_week_codes'] = $recurrence['recurrence_byday'];
-    }
-    if (isset($recurrence['recurrence_byweekno'])) {
-        $formatted['week_of_month'] = intval($recurrence['recurrence_byweekno']);
-    }
-    if (isset($recurrence['specific_days'])) {
-        $formatted['specific_dates'] = explode(',', $recurrence['specific_days']);
-    }
-    if (isset($recurrence['exclude_days'])) {
-        $formatted['excluded_dates'] = explode(',', $recurrence['exclude_days']);
-    }
+	if ( isset( $recurrence['recurrence_start_date'] ) ) {
+		$formatted['start_date'] = $recurrence['recurrence_start_date'];
+	}
+	if ( isset( $recurrence['recurrence_end_date'] ) ) {
+		$formatted['end_date'] = $recurrence['recurrence_end_date'];
+	}
+	if ( isset( $recurrence['recurrence_byday'] ) ) {
+		$formatted['days_of_week_codes'] = $recurrence['recurrence_byday'];
+	}
+	if ( isset( $recurrence['recurrence_byweekno'] ) ) {
+		$formatted['week_of_month'] = intval( $recurrence['recurrence_byweekno'] );
+	}
+	if ( isset( $recurrence['specific_days'] ) ) {
+		$formatted['specific_dates'] = explode( ',', $recurrence['specific_days'] );
+	}
+	if ( isset( $recurrence['exclude_days'] ) ) {
+		$formatted['excluded_dates'] = explode( ',', $recurrence['exclude_days'] );
+	}
 
-    return $formatted;
+	return $formatted;
 }
 
-function eme_rest_calculate_instances($recurrence, $start_date, $end_date) {
-    // Simple instance calculation (basic implementation)
-    // For production, use EME's built-in calculation functions
+// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- $start_date/$end_date reserved for future date range filtering.
+function eme_rest_calculate_instances( $recurrence, $start_date, $end_date ) {
+	// Simple instance calculation (basic implementation).
+	// For production, use EME's built-in calculation functions.
 
-    $instances = [];
-    $freq = $recurrence['recurrence_freq'];
+	$instances = array();
+	$freq      = $recurrence['recurrence_freq'];
 
-    if ($freq === 'weekly') {
-        // Calculate weekly instances
-        $current = strtotime($recurrence['recurrence_start_date']);
-        $end = strtotime($recurrence['recurrence_end_date']);
-        $interval = intval($recurrence['recurrence_interval']) * 7 * 86400; // weeks to seconds
-        $days_of_week = explode(',', $recurrence['recurrence_byday']);
+	if ( 'weekly' === $freq ) {
+		// Calculate weekly instances.
+		$current      = strtotime( $recurrence['recurrence_start_date'] );
+		$end          = strtotime( $recurrence['recurrence_end_date'] );
+		$days_of_week = explode( ',', $recurrence['recurrence_byday'] );
 
-        while ($current <= $end) {
-            $day_of_week = date('w', $current);
-            if (in_array($day_of_week, $days_of_week)) {
-                $instances[] = [
-                    'start' => date('Y-m-d H:i:s', $current),
-                    'end' => date('Y-m-d H:i:s', $current + intval($recurrence['event_duration'])),
-                ];
-            }
-            $current += 86400; // next day
-        }
+		while ( $current <= $end ) {
+			$day_of_week = gmdate( 'w', $current );
+			if ( in_array( $day_of_week, $days_of_week, true ) ) {
+				$instances[] = array(
+					'start' => gmdate( 'Y-m-d H:i:s', $current ),
+					'end'   => gmdate( 'Y-m-d H:i:s', $current + intval( $recurrence['event_duration'] ) ),
+				);
+			}
+			$current += 86400; // next day.
+		}
+	} elseif ( 'specific' === $freq ) {
+		// Specific dates.
+		$dates = explode( ',', $recurrence['specific_days'] );
+		foreach ( $dates as $specific_date ) {
+			$timestamp   = strtotime( $specific_date );
+			$instances[] = array(
+				'start' => gmdate( 'Y-m-d H:i:s', $timestamp ),
+				'end'   => gmdate( 'Y-m-d H:i:s', $timestamp + intval( $recurrence['event_duration'] ) ),
+			);
+		}
+	}
 
-    } elseif ($freq === 'specific') {
-        // Specific dates
-        $dates = explode(',', $recurrence['specific_days']);
-        foreach ($dates as $date) {
-            $timestamp = strtotime($date);
-            $instances[] = [
-                'start' => date('Y-m-d H:i:s', $timestamp),
-                'end' => date('Y-m-d H:i:s', $timestamp + intval($recurrence['event_duration'])),
-            ];
-        }
-    }
-
-    return $instances;
+	return $instances;
 }

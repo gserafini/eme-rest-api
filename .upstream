@@ -1,0 +1,38 @@
+{
+	"parent_plugin": "Events Made Easy",
+	"parent_slug_wporg": "events-made-easy",
+	"tested_version": "2.3.18",
+	"tested_date": "2026-02-08",
+	"functions_used": [
+		"eme_new_event",
+		"eme_get_event",
+		"eme_get_events",
+		"eme_db_insert_event",
+		"eme_db_update_event",
+		"eme_db_delete_event",
+		"eme_change_event_status",
+		"eme_new_location",
+		"eme_get_location",
+		"eme_get_locations",
+		"eme_insert_location",
+		"eme_update_location",
+		"eme_get_categories",
+		"eme_init_event_props"
+	],
+	"optional_functions": [
+		"eme_get_recurrence_events"
+	],
+	"tables_used": [
+		"eme_events",
+		"eme_categories",
+		"eme_recurrence"
+	],
+	"status_codes": {
+		"trash": 0,
+		"public": 1,
+		"private": 2,
+		"unlisted": 3,
+		"draft": 5,
+		"fs_draft": 6
+	}
+}

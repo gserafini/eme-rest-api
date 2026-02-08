@@ -117,15 +117,6 @@ foreach ( $upstream['functions_used'] as $func ) {
 	assert_true( function_exists( $func ), "$func() exists" );
 }
 
-// Optional functions — used with function_exists() guard in our code.
-$optional = isset( $upstream['optional_functions'] ) ? $upstream['optional_functions'] : array();
-foreach ( $optional as $func ) {
-	if ( function_exists( $func ) ) {
-		compat_pass( "$func() exists (optional)" );
-	} else {
-		compat_skip( "$func() not available (optional, guarded with function_exists)" );
-	}
-}
 echo "\n";
 
 // ─── Layer 2: Function signatures ───

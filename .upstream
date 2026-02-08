@@ -19,9 +19,6 @@
 		"eme_get_categories",
 		"eme_init_event_props"
 	],
-	"optional_functions": [
-		"eme_get_recurrence_events"
-	],
 	"tables_used": [
 		"eme_events",
 		"eme_categories",

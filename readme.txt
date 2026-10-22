@@ -1,10 +1,10 @@
 === Events Made Easy REST API ===
 Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
-Requires at least: 5.0
+Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.9.2
-Requires PHP: 7.2
+Stable tag: 1.10.0-rc.1
+Requires PHP: 8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -13,6 +13,12 @@ REST API endpoints for Events Made Easy plugin - CRUD operations for events, loc
 == Description ==
 
 A WordPress plugin that adds REST API endpoints to the Events Made Easy plugin.
+
+This branch is an unreleased native recurrence candidate. Published release
+1.9.2 remains available while the EME engine/schema upgrade is being qualified.
+Recurrence creation requires EME 3.2.26 and a matching database schema; an older
+engine receives HTTP 409 without writes. See README.md for duration, daylight
+saving, failure cleanup and native deletion behavior.
 
 Events Made Easy (EME) uses custom database tables instead of WordPress custom post types, so it doesn't expose events via the WordPress REST API by default. This plugin bridges that gap by providing a clean REST API interface to EME's functionality.
 
@@ -102,13 +108,19 @@ Yes! The plugin fully supports WordPress Multisite. Each site in the network get
 
 = What version of Events Made Easy is required? =
 
-Events Made Easy version 2.0 or higher is recommended. The plugin uses EME's built-in functions for reliability and compatibility.
+Recurrence creation requires qualified Events Made Easy 3.2.26 and its matching schema. The plugin uses EME's native recurrence functions.
 
 == Screenshots ==
 
 Screenshots coming soon.
 
 == Changelog ==
+
+= 1.10.0-rc.1 - unreleased =
+* Native recurrence generation, interval/exclusion handling, Sunday normalization and native deletion hooks.
+* Validate all stored occurrences before reporting success; clean up partial saves through EME.
+* Preserve elapsed seconds or reject unrepresentable daylight-saving patterns before writes.
+* Require a qualified EME engine/schema for recurrence creation; see README.md before deployment.
 
 = 1.9.2 - 2026-10-22 =
 * Security: anonymous event and recurrence reads respect draft, private and trash visibility. Public and direct unlisted reads remain available.
@@ -194,6 +206,9 @@ Screenshots coming soon.
 * WordPress application password authentication
 
 == Upgrade Notice ==
+
+= 1.10.0-rc.1 =
+Unreleased candidate: qualify the EME engine/schema upgrade first. Recurrence creation requires EME 3.2.26 and changes native duration/deletion behavior; see README.md.
 
 = 1.9.2 =
 Security maintenance: anonymous event and recurrence reads now enforce event visibility. Recurrence reads use actual stored occurrences.

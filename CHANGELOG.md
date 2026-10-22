@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.10.0-rc.1 — unreleased
+
+- Generate weekly, interval/exclusion, monthly and specific recurring events
+  through the native EME engine, preserving requested local times and elapsed
+  seconds. Normalize Sunday 0 to the native Sunday 7 representation.
+- Require a qualified EME 3.2.26 engine and matching schema before recurrence
+  creation. Older engines receive HTTP 409 before writes.
+- Validate sanitized titles against the native TEXT byte limit. Verify every
+  stored occurrence before reporting success; failed saves return 500 and use
+  native cleanup instead of leaving an apparently complete partial series.
+- Reject nonexistent or unrepresentable daylight-saving times before writing.
+  Expose native inclusive duration days separately from API duration seconds.
+- Delete patterns through native hooks and linked event/booking/task cleanup.
+
+Validation: real WordPress REST contracts in private copies, including Sunday
+generation, visibility, native deletion hooks, partial/all-insert fault injection,
+sanitized title boundaries, elapsed-time transitions and the legacy engine guard.
+This candidate is not released or deployed to production.
+
 ## 1.9.2 — 2026-10-22
 
 - Anonymous event and recurrence reads now respect event visibility. Draft,

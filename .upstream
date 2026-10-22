@@ -1,8 +1,8 @@
 {
 	"parent_plugin": "Events Made Easy",
 	"parent_slug_wporg": "events-made-easy",
-	"tested_version": "2.3.18",
-	"tested_date": "2026-02-08",
+	"tested_version": "2.3.14",
+	"tested_date": "2026-10-22",
 	"functions_used": [
 		"eme_new_event",
 		"eme_get_event",
@@ -31,5 +31,9 @@
 		"unlisted": 3,
 		"draft": 5,
 		"fs_draft": 6
-	}
+	},
+	"tested_versions": [
+		"2.3.14",
+		"3.2.26"
+	]
 }

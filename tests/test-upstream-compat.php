@@ -84,7 +84,7 @@ if ( function_exists( 'get_plugins' ) ) {
 	}
 } else {
 	// Fallback: read the plugin file header directly.
-	$eme_main = WP_PLUGIN_DIR . '/events-made-easy/events-made-easy.php';
+	$eme_main = WP_PLUGIN_DIR . '/events-made-easy/events-manager.php';
 	if ( file_exists( $eme_main ) ) {
 		$header = get_file_data( $eme_main, array( 'Version' => 'Version' ) );
 		if ( ! empty( $header['Version'] ) ) {

@@ -3,7 +3,7 @@ Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
 Requires at least: 5.0
 Tested up to: 7.1
-Stable tag: 1.9.1
+Stable tag: 1.9.2
 Requires PHP: 7.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -110,6 +110,12 @@ Screenshots coming soon.
 
 == Changelog ==
 
+= 1.9.2 - 2026-10-22 =
+* Security: anonymous event and recurrence reads respect draft, private and trash visibility. Public and direct unlisted reads remain available.
+* Recurrence lists now use actual pattern IDs; instance reads return stored occurrences within the requested date window.
+* Tested with EME 2.3.14 and the isolated EME 3.2.26 migration candidate on WordPress 7.1.3 / PHP 8.5.12.
+* Recurrence creation changes remain separate from this maintenance release.
+
 = 1.9.1 =
 * Tested up to WordPress 6.9
 * Coding standards: PHPCS WordPress-Extra formatting improvements
@@ -188,6 +194,9 @@ Screenshots coming soon.
 * WordPress application password authentication
 
 == Upgrade Notice ==
+
+= 1.9.2 =
+Security maintenance: anonymous event and recurrence reads now enforce event visibility. Recurrence reads use actual stored occurrences.
 
 = 1.6.0 =
 BREAKING CHANGE: All endpoint URLs have changed to use eme_ prefix. Update your API calls from /events to /eme_events, /locations to /eme_locations, etc.

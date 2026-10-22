@@ -258,7 +258,7 @@ Request body:
 GET /eme/v1/eme_recurrences
 ```
 
-Returns all recurring event templates (parent events that have recurring instances).
+Returns one real event for each recurrence pattern visible to the caller. Anonymous lists contain published events; editors can also inspect private patterns.
 
 Example:
 
@@ -266,10 +266,7 @@ Example:
 curl https://yoursite.com/wp-json/eme/v1/eme_recurrences
 ```
 
-**Response:** Array of event objects that are recurring templates. Each event will have:
-
-* `recurrence_id`: `0` (these are the parent templates)
-* Child events reference these via their `recurrence_id` field
+**Response:** Array of representative event objects. `id` is the stored event ID; `recurrence_id` is its nonzero pattern ID. Use the pattern ID for recurrence detail and instance endpoints.
 
 #### Create Recurring Event
 
@@ -371,6 +368,13 @@ Contributions are welcome! Please feel free to:
 * **Events Made Easy:** [EME GitHub](https://github.com/liedekef/events-made-easy)
 
 ## Changelog
+
+### v1.9.2 - 2026-10-22
+
+* Anonymous reads conceal draft, private, trash and front-end-submitted draft events and patterns. Published events and direct unlisted links retain their existing visibility.
+* Recurrence lists identify native patterns correctly. Instance reads use stored occurrences and the requested date window, preserving native intervals, exclusions and actual times.
+* Recurrence creation remains unchanged in this security maintenance release; its native-engine rewrite is qualified separately.
+* Real WordPress API tests cover both active legacy EME sites and the isolated 3.2.26 upgrade candidate. `tests/test-visibility.php` creates and cleans fixtures only in the guarded socket-only staging environment; never run it against production.
 
 ### v1.9.0 - 2025-11-12
 

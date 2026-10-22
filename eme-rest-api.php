@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.9.1
+ * Version: 1.9.2
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -365,6 +365,17 @@ function eme_rest_get_events( $request ) {
 		return rest_ensure_response( array() );
 	}
 
+	// Public API reads follow event visibility even when a caller supplies IDs.
+	if ( ! current_user_can( 'edit_posts' ) ) {
+		$events = array_values(
+			array_filter(
+				$events,
+				function ( $event ) {
+					return 1 === (int) $event['event_status'];
+				}
+			)
+		);
+	}
 	// Format events for REST response
 	$formatted_events = array_map( 'eme_rest_format_event', $events );
 
@@ -383,7 +394,7 @@ function eme_rest_get_event( $request ) {
 	// Use EME's built-in function to get event
 	$event = eme_get_event( $event_id );
 
-	if ( ! $event ) {
+	if ( ! $event || ( ! current_user_can( 'edit_posts' ) && ! in_array( (int) $event['event_status'], array( 1, 3 ), true ) ) ) {
 		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
 	}
 
@@ -903,6 +914,7 @@ function eme_rest_format_event( $event ) {
 
 	$formatted = array(
 		'id'                => intval( $event['event_id'] ),
+		'recurrence_id'     => isset( $event['recurrence_id'] ) ? intval( $event['recurrence_id'] ) : 0,
 		'title'             => $event['event_name'],
 		'description'       => $event['event_notes'],
 		'start_date'        => $event['event_start'],
@@ -966,32 +978,23 @@ function eme_rest_format_category( $category ) {
 }
 
 // Recurrence endpoints.
-function eme_rest_get_recurrences( $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- Required by WP REST API callback signature.
+function eme_rest_get_recurrences( $request ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.Found -- REST callback signature.
 	global $wpdb;
-	$table = $wpdb->prefix . 'eme_events';
-
-	// Get all events that are recurring templates (events that have child recurring instances)
-	// These are events where other events have this event's ID as their recurrence_id
-	// phpcs:disable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from $wpdb->prefix, no user input.
-	$recurring_events = $wpdb->get_results(
-		"SELECT DISTINCT e.*
-		FROM {$table} e
-		INNER JOIN {$table} children ON children.recurrence_id = e.event_id
-		WHERE e.recurrence IS NULL OR e.recurrence = 0
-		ORDER BY e.event_start DESC",
+	// A recurrence ID identifies a pattern, not another event. Return one real
+	// representative per pattern, retaining the existing event response shape.
+	$events = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT e.* FROM {$wpdb->prefix}eme_events e INNER JOIN
+        (SELECT recurrence_id, MIN(event_id) AS event_id FROM {$wpdb->prefix}eme_events
+         WHERE recurrence_id > 0 AND (%d = 1 OR event_status = 1) GROUP BY recurrence_id) patterns
+        ON patterns.event_id = e.event_id ORDER BY e.event_start DESC",
+			current_user_can( 'edit_posts' ) ? 1 : 0
+		),
 		ARRAY_A
 	);
-	// phpcs:enable WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-
-	if ( empty( $recurring_events ) ) {
-		return rest_ensure_response( array() );
-	}
-
-	// Format recurring events for REST response
-	$formatted_events = array_map( 'eme_rest_format_event', $recurring_events );
-
-	return rest_ensure_response( $formatted_events );
+	return rest_ensure_response( array_map( 'eme_rest_format_event', is_array( $events ) ? $events : array() ) );
 }
+
 
 function eme_rest_create_recurrence( $request ) {
 	$params = $request->get_json_params();
@@ -1079,28 +1082,19 @@ function eme_rest_create_recurrence( $request ) {
 			'success'            => true,
 			'event_id'           => $event_id,
 			'recurrence_id'      => $recurrence_id,
-			'recurrence_pattern' => eme_rest_format_recurrence( $recurrence_data ),
+			'recurrence_pattern' => eme_rest_format_recurrence( array_merge( $recurrence_data, array( 'recurrence_id' => $recurrence_id ) ) ),
 			'message'            => 'Recurring event created successfully',
 		)
 	);
 }
 
 function eme_rest_get_recurrence( $request ) {
-	$recurrence_id = intval( $request['id'] );
-
 	global $wpdb;
-	$table = $wpdb->prefix . 'eme_recurrence';
-
-	$recurrence = $wpdb->get_row(
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from $wpdb->prefix.
-		$wpdb->prepare( "SELECT * FROM $table WHERE recurrence_id = %d", $recurrence_id ),
-		ARRAY_A
-	);
-
-	if ( ! $recurrence ) {
+	$id         = (int) $request['id'];
+	$recurrence = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}eme_recurrence WHERE recurrence_id=%d", $id ), ARRAY_A );
+	if ( ! $recurrence || ( ! current_user_can( 'edit_posts' ) && ! (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d AND event_status IN (1,3)", $id ) ) ) ) {
 		return new WP_Error( 'not_found', 'Recurrence pattern not found', array( 'status' => 404 ) );
 	}
-
 	return rest_ensure_response( eme_rest_format_recurrence( $recurrence ) );
 }
 
@@ -1137,45 +1131,44 @@ function eme_rest_delete_recurrence( $request ) {
 }
 
 function eme_rest_get_recurrence_instances( $request ) {
-	$recurrence_id = intval( $request['id'] );
-
-	// Optional date range parameters
-	$start_date = isset( $request['start_date'] ) ? sanitize_text_field( $request['start_date'] ) : gmdate( 'Y-m-d' );
-	$end_date   = isset( $request['end_date'] ) ? sanitize_text_field( $request['end_date'] ) : gmdate( 'Y-m-d', strtotime( '+1 year' ) );
-
-	// Get recurrence pattern
+	$pattern = eme_rest_get_recurrence( $request );
+	if ( is_wp_error( $pattern ) ) {
+		return $pattern;
+	}
+	try {
+		$start = isset( $request['start_date'] ) ? eme_rest_datetime( $request['start_date'] ) : eme_rest_datetime( gmdate( 'Y-m-d' ) );
+		$end   = isset( $request['end_date'] ) ? eme_rest_datetime( $request['end_date'] ) : $start->modify( '+1 year' );
+		if ( $end < $start ) {
+			throw new InvalidArgumentException( 'End date must not precede start date' );
+		}
+	} catch ( Exception $failure ) {
+		return new WP_Error( 'invalid_date_range', $failure->getMessage(), array( 'status' => 400 ) );
+	}
 	global $wpdb;
-	$table = $wpdb->prefix . 'eme_recurrence';
-
-	$recurrence = $wpdb->get_row(
-		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name from $wpdb->prefix.
-		$wpdb->prepare( "SELECT * FROM $table WHERE recurrence_id = %d", $recurrence_id ),
+	// Return actual generated occurrences, rather than a second recurrence
+	// calculator with different interval, exclusion and duration semantics.
+	$instances = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT event_start AS start,event_end AS end FROM {$wpdb->prefix}eme_events
+        WHERE recurrence_id=%d AND event_end >= %s AND event_start <= %s AND (%d = 1 OR event_status IN (1,3))
+        ORDER BY event_start,event_id",
+			(int) $request['id'],
+			$start->setTime( 0, 0 )->format( 'Y-m-d H:i:s' ),
+			$end->setTime( 23, 59, 59 )->format( 'Y-m-d H:i:s' ),
+			current_user_can( 'edit_posts' ) ? 1 : 0
+		),
 		ARRAY_A
 	);
-
-	if ( ! $recurrence ) {
-		return new WP_Error( 'not_found', 'Recurrence pattern not found', array( 'status' => 404 ) );
-	}
-
-	// Calculate instances using EME's built-in function.
-	if ( function_exists( 'eme_get_recurrence_events' ) ) {
-		$instances = eme_get_recurrence_events( $recurrence_id, $start_date, $end_date );
-	} else {
-		// Fallback: calculate manually
-		$instances = eme_rest_calculate_instances( $recurrence, $start_date, $end_date );
-	}
-
 	return rest_ensure_response(
 		array(
-			'recurrence_id' => $recurrence_id,
-			'pattern'       => eme_rest_format_recurrence( $recurrence ),
+			'recurrence_id' => (int) $request['id'],
+			'pattern'       => $pattern->get_data(),
 			'instances'     => $instances,
 			'count'         => count( $instances ),
 		)
 	);
 }
 
-// Helper functions
 function eme_rest_validate_recurrence( $recurrence ) {
 	// Validate frequency
 	$valid_frequencies = array( 'weekly', 'monthly', 'specific' );
@@ -1327,7 +1320,7 @@ function eme_rest_format_recurrence( $recurrence ) {
 }
 
 // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- $start_date/$end_date reserved for future date range filtering.
-function eme_rest_calculate_instances( $recurrence, $start_date, $end_date ) {
+function eme_rest_calculate_instances( $recurrence, $start_date, $end_date ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Retained legacy helper signature; API now reads stored occurrences.
 	// Simple instance calculation (basic implementation).
 	// For production, use EME's built-in calculation functions.
 
@@ -1363,4 +1356,18 @@ function eme_rest_calculate_instances( $recurrence, $start_date, $end_date ) {
 	}
 
 	return $instances;
+}
+
+function eme_rest_datetime( $input ) {
+	$input = trim( (string) $input );
+	if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/', $input ) ) {
+		throw new InvalidArgumentException( 'Use an ISO date or local date/time' );
+	}
+	global $eme_timezone;
+	$zone = new DateTimeZone( defined( 'EME_TIMEZONE' ) ? EME_TIMEZONE : ( $eme_timezone ? $eme_timezone : 'UTC' ) );
+	$date = new DateTimeImmutable( $input, $zone );
+	if ( $date->format( 'Y-m-d' ) !== substr( $input, 0, 10 ) ) {
+		throw new InvalidArgumentException( 'Invalid calendar date' );
+	}
+	return $date;
 }

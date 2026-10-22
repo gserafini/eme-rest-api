@@ -1,16 +1,16 @@
 #!/bin/bash
-# Create a WordPress-ready ZIP file for plugin installation
+# Create a WordPress-ready ZIP from this checkout, regardless of its name.
+set -euo pipefail
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-cd "$SCRIPT_DIR/.."
-
-# Remove old ZIP if exists
-rm -f eme-rest-api/eme-rest-api.zip
-
-# Create ZIP with proper folder structure for WordPress
-# The cd to parent dir and then zip with path creates the folder structure
-zip -r eme-rest-api/eme-rest-api.zip eme-rest-api/eme-rest-api.php eme-rest-api/readme.txt eme-rest-api/README.md \
-  -x "*.git*" "*.DS_Store"
+BUILD_DIR=$(mktemp -d)
+trap 'rm -rf -- "$BUILD_DIR"' EXIT
+mkdir "$BUILD_DIR/eme-rest-api"
+cp "$SCRIPT_DIR/eme-rest-api.php" "$SCRIPT_DIR/readme.txt" "$SCRIPT_DIR/README.md" "$BUILD_DIR/eme-rest-api/"
+cd "$BUILD_DIR"
+zip -q candidate.zip eme-rest-api/eme-rest-api.php eme-rest-api/readme.txt eme-rest-api/README.md
+unzip -tqq candidate.zip
+mv candidate.zip "$SCRIPT_DIR/eme-rest-api.zip"
 
 echo "✓ Created eme-rest-api.zip"
 echo ""

@@ -2,7 +2,7 @@
 Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
 Requires at least: 5.0
-Tested up to: 6.9
+Tested up to: 7.1
 Stable tag: 1.9.1
 Requires PHP: 7.2
 License: GPLv2 or later

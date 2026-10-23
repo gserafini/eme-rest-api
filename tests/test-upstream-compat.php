@@ -61,7 +61,7 @@ function assert_equal( $expected, $actual, $msg ) {
 
 $upstream_file = dirname( __DIR__ ) . '/.upstream';
 if ( ! file_exists( $upstream_file ) ) {
-	echo "[ERROR] .upstream file not found at $upstream_file\n";
+	echo "[ERROR] .upstream file not found at $upstream_file. Run wp eval-file with the actual tests/test-upstream-compat.php path inside the checkout; stdin execution loses the metadata directory.\n";
 	exit( 1 );
 }
 

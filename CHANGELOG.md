@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.10.0-rc.1 — unreleased
+## 1.10.0 — 2026-10-22
 
 - Generate weekly, interval/exclusion, monthly and specific recurring events
   through the native EME engine, preserving requested local times and elapsed
@@ -13,11 +13,16 @@
 - Reject nonexistent or unrepresentable daylight-saving times before writing.
   Expose native inclusive duration days separately from API duration seconds.
 - Delete patterns through native hooks and linked event/booking/task cleanup.
+- Honor configured EME add/publish/editor/author capabilities and event ownership
+  for event changes and recurrence deletion. Writers without publish permission
+  create drafts. Configured edit-all users retain access without `edit_posts`.
+- Omit private schedule rules and dates from public recurrence metadata; public
+  occurrence dates remain available through the filtered instances endpoint.
 
 Validation: real WordPress REST contracts in private copies, including Sunday
 generation, visibility, native deletion hooks, partial/all-insert fault injection,
-sanitized title boundaries, elapsed-time transitions and the legacy engine guard.
-This candidate is not released or deployed to production.
+sanitized title boundaries, elapsed-time transitions, restricted/custom roles,
+mixed-visibility schedule privacy and the legacy engine guard.
 
 ## 1.9.2 — 2026-10-22
 

@@ -8,9 +8,8 @@
 
 REST API endpoints for Events Made Easy plugin - CRUD operations for events, locations, categories, and recurring events.
 
-This branch is the unreleased 1.10.0-rc.1 native recurrence candidate. The latest
-published release remains 1.9.2. Qualify the EME engine and database upgrade
-before deploying this branch to a live calendar.
+Version 1.10.0 uses EME's native recurrence lifecycle. Qualify the EME engine
+and database upgrade before enabling recurrence creation on a live calendar.
 
 ## Description
 
@@ -38,7 +37,21 @@ functionality.
 * Events Made Easy 3.2.26 with its matching database schema for recurrence creation
 
 Older EME engines retain read/event endpoints but recurrence creation returns
-HTTP 409 before any write. Keep release 1.9.2 when the engine upgrade is pending.
+HTTP 409 before any recurrence write. Existing event and read endpoints remain available.
+
+Event and recurrence creation honor EME's configured add or edit-all capability.
+Publishing requires its configured publish capability; other writers create drafts.
+Event changes and recurrence deletion require the configured edit-all capability,
+or the configured author capability with matching event ownership.
+
+Public recurrence metadata contains its ID and duration only. Pattern bounds,
+specific dates, exclusions and generation rules are available to staff readers;
+anonymous clients use the instances endpoint for visible occurrence dates.
+
+Run PHP contracts only in an isolated staging database. Use its configured
+`/bBLOG/` fixture URL rather than a live domain alias. Invoke the actual test
+file with `wp eval-file tests/test-upstream-compat.php`; piping that test through
+stdin loses the adjacent `.upstream` metadata directory.
 
 ## Installation
 

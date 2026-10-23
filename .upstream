@@ -21,7 +21,8 @@
 		"eme_new_recurrence",
 		"eme_get_recurrence_days",
 		"eme_db_insert_recurrence",
-		"eme_db_delete_recurrence"
+		"eme_db_delete_recurrence",
+		"eme_get_recurrence_first_eventid"
 	],
 	"tables_used": [
 		"eme_events",

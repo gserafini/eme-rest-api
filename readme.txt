@@ -3,7 +3,7 @@ Contributors: gabrielserafini
 Tags: events, rest-api, events-made-easy, api, calendar
 Requires at least: 6.0
 Tested up to: 7.1
-Stable tag: 1.10.0-rc.1
+Stable tag: 1.10.0
 Requires PHP: 8.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -14,8 +14,7 @@ REST API endpoints for Events Made Easy plugin - CRUD operations for events, loc
 
 A WordPress plugin that adds REST API endpoints to the Events Made Easy plugin.
 
-This branch is an unreleased native recurrence candidate. Published release
-1.9.2 remains available while the EME engine/schema upgrade is being qualified.
+Version 1.10.0 uses the native recurrence lifecycle and configured EME permissions.
 Recurrence creation requires EME 3.2.26 and a matching database schema; an older
 engine receives HTTP 409 without writes. See README.md for duration, daylight
 saving, failure cleanup and native deletion behavior.
@@ -116,11 +115,13 @@ Screenshots coming soon.
 
 == Changelog ==
 
-= 1.10.0-rc.1 - unreleased =
+= 1.10.0 - 2026-10-22 =
 * Native recurrence generation, interval/exclusion handling, Sunday normalization and native deletion hooks.
 * Validate all stored occurrences before reporting success; clean up partial saves through EME.
 * Preserve elapsed seconds or reject unrepresentable daylight-saving patterns before writes.
 * Require a qualified EME engine/schema for recurrence creation; see README.md before deployment.
+* Honor configured EME creation/publishing/editing capabilities and event ownership.
+* Public recurrence metadata omits schedule rules and private occurrence dates.
 
 = 1.9.2 - 2026-10-22 =
 * Security: anonymous event and recurrence reads respect draft, private and trash visibility. Public and direct unlisted reads remain available.
@@ -207,7 +208,7 @@ Screenshots coming soon.
 
 == Upgrade Notice ==
 
-= 1.10.0-rc.1 =
+= 1.10.0 =
 Unreleased candidate: qualify the EME engine/schema upgrade first. Recurrence creation requires EME 3.2.26 and changes native duration/deletion behavior; see README.md.
 
 = 1.9.2 =

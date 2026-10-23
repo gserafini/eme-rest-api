@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.10.0-rc.1
+ * Version: 1.10.0
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
@@ -66,7 +66,7 @@ add_action(
 				array(
 					'methods'             => 'POST',
 					'callback'            => 'eme_rest_create_event',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_create_permission',
 				),
 			)
 		);
@@ -83,12 +83,12 @@ add_action(
 				array(
 					'methods'             => array( 'POST', 'PUT', 'PATCH' ),
 					'callback'            => 'eme_rest_update_event',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_event_permission',
 				),
 				array(
 					'methods'             => 'DELETE',
 					'callback'            => 'eme_rest_delete_event',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_event_permission',
 				),
 			)
 		);
@@ -159,7 +159,7 @@ add_action(
 				array(
 					'methods'             => 'POST',
 					'callback'            => 'eme_rest_create_recurrence',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_create_permission',
 				),
 			)
 		);
@@ -176,7 +176,7 @@ add_action(
 				array(
 					'methods'             => 'DELETE',
 					'callback'            => 'eme_rest_delete_recurrence',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_recurrence_permission',
 				),
 			)
 		);
@@ -199,9 +199,43 @@ function eme_rest_read_permission() {
 	return true;
 }
 
+function eme_rest_read_private_permission() {
+	return current_user_can( 'edit_posts' ) || current_user_can( get_option( 'eme_cap_edit_events' ) );
+}
+
 function eme_rest_write_permission() {
 	// Require authentication and edit_posts capability
 	return current_user_can( 'edit_posts' );
+}
+
+// Event writes follow EME's configured add, author, editor and publish policy.
+function eme_rest_create_permission() {
+	return current_user_can( get_option( 'eme_cap_add_event' ) ) || current_user_can( get_option( 'eme_cap_edit_events' ) );
+}
+
+function eme_rest_can_manage_event( $event ) {
+	return $event && ( current_user_can( get_option( 'eme_cap_edit_events' ) ) ||
+		( current_user_can( get_option( 'eme_cap_author_event' ) ) && get_current_user_id() === (int) $event['event_author'] ) );
+}
+
+function eme_rest_event_permission( $request ) {
+	$event = eme_get_event( (int) $request['id'] );
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
+	}
+	return eme_rest_can_manage_event( $event ) ? true : new WP_Error( 'forbidden', 'EME does not permit editing this event.', array( 'status' => 403 ) );
+}
+
+function eme_rest_recurrence_permission( $request ) {
+	$event = eme_get_event( eme_get_recurrence_first_eventid( (int) $request['id'] ) );
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Recurrence event not found', array( 'status' => 404 ) );
+	}
+	return eme_rest_can_manage_event( $event ) ? true : new WP_Error( 'forbidden', 'EME does not permit deleting this recurrence.', array( 'status' => 403 ) );
+}
+
+function eme_rest_requested_status( $status ) {
+	return current_user_can( get_option( 'eme_cap_publish_event' ) ) ? eme_rest_map_status( $status ) : 5;
 }
 
 // Geocoding function using OpenStreetMap Nominatim (same as EME frontend)
@@ -366,7 +400,7 @@ function eme_rest_get_events( $request ) {
 	}
 
 	// Public API reads follow event visibility even when a caller supplies IDs.
-	if ( ! current_user_can( 'edit_posts' ) ) {
+	if ( ! eme_rest_read_private_permission() ) {
 		$events = array_values(
 			array_filter(
 				$events,
@@ -394,7 +428,7 @@ function eme_rest_get_event( $request ) {
 	// Use EME's built-in function to get event
 	$event = eme_get_event( $event_id );
 
-	if ( ! $event || ( ! current_user_can( 'edit_posts' ) && ! in_array( (int) $event['event_status'], array( 1, 3 ), true ) ) ) {
+	if ( ! $event || ( ! eme_rest_read_private_permission() && ! in_array( (int) $event['event_status'], array( 1, 3 ), true ) ) ) {
 		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
 	}
 
@@ -442,7 +476,7 @@ function eme_rest_create_event( $request ) {
 	}
 
 	// Set event status (defaults to draft if not specified)
-	$event['event_status'] = isset( $params['status'] ) ? eme_rest_map_status( $params['status'] ) : 5;
+	$event['event_status'] = eme_rest_requested_status( $params['status'] ?? 'draft' );
 
 	// Optional fields
 	if ( isset( $params['location_id'] ) ) {
@@ -531,8 +565,8 @@ function eme_rest_update_event( $request ) {
 	if ( isset( $params['end_date'] ) ) {
 		$event['event_end'] = sanitize_text_field( $params['end_date'] );
 	}
-	if ( isset( $params['status'] ) ) {
-		$event['event_status'] = eme_rest_map_status( $params['status'] );
+	if ( isset( $params['status'] ) || ! current_user_can( get_option( 'eme_cap_publish_event' ) ) ) {
+		$event['event_status'] = eme_rest_requested_status( $params['status'] ?? 'draft' );
 	}
 	if ( isset( $params['location_id'] ) ) {
 		$event['location_id'] = intval( $params['location_id'] );
@@ -628,7 +662,7 @@ function eme_rest_change_status( $request ) {
 	}
 
 	// Map status string to EME status code
-	$new_status = eme_rest_map_status( $params['status'] );
+	$new_status = eme_rest_requested_status( $params['status'] );
 
 	// Validate status code (must be 0-6)
 	// Status codes: 0=trash, 1=public, 2=private, 3=unlisted, 5=draft, 6=fs_draft.
@@ -988,7 +1022,7 @@ function eme_rest_get_recurrences( $request ) { // phpcs:ignore Generic.CodeAnal
         (SELECT recurrence_id, MIN(event_id) AS event_id FROM {$wpdb->prefix}eme_events
          WHERE recurrence_id > 0 AND (%d = 1 OR event_status = 1) GROUP BY recurrence_id) patterns
         ON patterns.event_id = e.event_id ORDER BY e.event_start DESC",
-			current_user_can( 'edit_posts' ) ? 1 : 0
+			eme_rest_read_private_permission() ? 1 : 0
 		),
 		ARRAY_A
 	);
@@ -1059,7 +1093,7 @@ function eme_rest_create_recurrence( $request ) {
 	$event['event_properties'] = eme_init_event_props( array(), 1 );
 	$event['event_name']       = $title;
 	$event['event_notes']      = isset( $params['description'] ) ? wp_kses_post( $params['description'] ) : '';
-	$event['event_status']     = isset( $params['status'] ) ? eme_rest_map_status( $params['status'] ) : 5;
+	$event['event_status']     = eme_rest_requested_status( $params['status'] ?? 'draft' );
 	$event['event_author']     = get_current_user_id();
 	$event['event_start']      = $start->format( 'Y-m-d H:i:s' );
 	$event['event_end']        = $end->format( 'Y-m-d H:i:s' );
@@ -1174,7 +1208,7 @@ function eme_rest_get_recurrence( $request ) {
 	global $wpdb;
 	$id         = (int) $request['id'];
 	$recurrence = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}eme_recurrence WHERE recurrence_id=%d", $id ), ARRAY_A );
-	if ( ! $recurrence || ( ! current_user_can( 'edit_posts' ) && ! (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d AND event_status IN (1,3)", $id ) ) ) ) {
+	if ( ! $recurrence || ( ! eme_rest_read_private_permission() && ! (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d AND event_status IN (1,3)", $id ) ) ) ) {
 		return new WP_Error( 'not_found', 'Recurrence pattern not found', array( 'status' => 404 ) );
 	}
 	return rest_ensure_response( eme_rest_format_recurrence( $recurrence ) );
@@ -1235,7 +1269,7 @@ function eme_rest_get_recurrence_instances( $request ) {
 			(int) $request['id'],
 			$start->setTime( 0, 0 )->format( 'Y-m-d H:i:s' ),
 			$end->setTime( 23, 59, 59 )->format( 'Y-m-d H:i:s' ),
-			current_user_can( 'edit_posts' ) ? 1 : 0
+			eme_rest_read_private_permission() ? 1 : 0
 		),
 		ARRAY_A
 	);
@@ -1373,7 +1407,7 @@ function eme_rest_parse_recurrence( $pattern ) {
 function eme_rest_format_recurrence( $recurrence ) {
 	global $wpdb;
 	$id        = (int) $recurrence['recurrence_id'];
-	$event     = $wpdb->get_row( $wpdb->prepare( "SELECT event_start,event_end FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d AND (%d=1 OR event_status IN (1,3)) ORDER BY event_start,event_id LIMIT 1", $id, current_user_can( 'edit_posts' ) ? 1 : 0 ), ARRAY_A );
+	$event     = $wpdb->get_row( $wpdb->prepare( "SELECT event_start,event_end FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d AND (%d=1 OR event_status IN (1,3)) ORDER BY event_start,event_id LIMIT 1", $id, eme_rest_read_private_permission() ? 1 : 0 ), ARRAY_A );
 	$seconds   = $event ? eme_rest_datetime( $event['event_end'] )->getTimestamp() - eme_rest_datetime( $event['event_start'] )->getTimestamp() : 0;
 	$formatted = array(
 		'id'            => $id,
@@ -1382,6 +1416,11 @@ function eme_rest_format_recurrence( $recurrence ) {
 		'duration'      => $seconds,
 		'duration_days' => (int) $recurrence['event_duration'],
 	);
+	if ( ! eme_rest_read_private_permission() ) {
+		// Pattern rules and bounds can reveal private/draft occurrence dates.
+		// Public clients obtain only visible dates through the instances endpoint.
+		return array_intersect_key( $formatted, array_flip( array( 'id', 'duration', 'duration_days' ) ) );
+	}
 	foreach ( array(
 		'recurrence_start_date' => 'start_date',
 		'recurrence_end_date'   => 'end_date',

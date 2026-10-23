@@ -1,7 +1,7 @@
 {
 	"parent_plugin": "Events Made Easy",
 	"parent_slug_wporg": "events-made-easy",
-	"tested_version": "2.3.14",
+	"tested_version": "3.2.26",
 	"tested_date": "2026-10-22",
 	"functions_used": [
 		"eme_new_event",
@@ -17,7 +17,12 @@
 		"eme_insert_location",
 		"eme_update_location",
 		"eme_get_categories",
-		"eme_init_event_props"
+		"eme_init_event_props",
+		"eme_new_recurrence",
+		"eme_get_recurrence_days",
+		"eme_db_insert_recurrence",
+		"eme_db_delete_recurrence",
+		"eme_get_recurrence_first_eventid"
 	],
 	"tables_used": [
 		"eme_events",
@@ -35,5 +40,7 @@
 	"tested_versions": [
 		"2.3.14",
 		"3.2.26"
-	]
+	],
+	"recurrence_creation_minimum": "3.2.26 with matching EME_DB_VERSION",
+	"legacy_engine_policy": "Recurrence creation returns409 before writes; read/event compatibility retained"
 }

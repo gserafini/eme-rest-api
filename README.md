@@ -1,12 +1,15 @@
 # Events Made Easy REST API
 
-[![WordPress](https://img.shields.io/badge/WordPress-5.0%2B-blue.svg)](https://wordpress.org/)
-[![PHP](https://img.shields.io/badge/PHP-7.2%2B-purple.svg)](https://php.net/)
+[![WordPress](https://img.shields.io/badge/WordPress-6.0%2B-blue.svg)](https://wordpress.org/)
+[![PHP](https://img.shields.io/badge/PHP-8.1%2B-purple.svg)](https://php.net/)
 [![License](https://img.shields.io/badge/License-GPLv2%20or%20later-green.svg)](https://www.gnu.org/licenses/gpl-2.0.html)
 [![Version](https://img.shields.io/github/v/release/gserafini/eme-rest-api)](https://github.com/gserafini/eme-rest-api/releases)
 [![GitHub stars](https://img.shields.io/github/stars/gserafini/eme-rest-api?style=social)](https://github.com/gserafini/eme-rest-api)
 
 REST API endpoints for Events Made Easy plugin - CRUD operations for events, locations, categories, and recurring events.
+
+Version 1.10.0 uses EME's native recurrence lifecycle. Qualify the EME engine
+and database upgrade before enabling recurrence creation on a live calendar.
 
 ## Description
 
@@ -29,9 +32,26 @@ functionality.
 
 ## Requirements
 
-* WordPress 5.0 or higher
-* PHP 7.2 or higher
-* Events Made Easy plugin 2.0+ installed and activated
+* WordPress 6.0 or higher
+* PHP 8.1 or higher
+* Events Made Easy 3.2.26 with its matching database schema for recurrence creation
+
+Older EME engines retain read/event endpoints but recurrence creation returns
+HTTP 409 before any recurrence write. Existing event and read endpoints remain available.
+
+Event and recurrence creation honor EME's configured add or edit-all capability.
+Publishing requires its configured publish capability; other writers create drafts.
+Event changes and recurrence deletion require the configured edit-all capability,
+or the configured author capability with matching event ownership.
+
+Public recurrence metadata contains its ID and duration only. Pattern bounds,
+specific dates, exclusions and generation rules are available to staff readers;
+anonymous clients use the instances endpoint for visible occurrence dates.
+
+Run PHP contracts only in an isolated staging database. Use its configured
+`/bBLOG/` fixture URL rather than a live domain alias. Invoke the actual test
+file with `wp eval-file tests/test-upstream-compat.php`; piping that test through
+stdin loses the adjacent `.upstream` metadata directory.
 
 ## Installation
 
@@ -279,12 +299,17 @@ Request body for weekly recurrence:
 ```json
 {
   "title": "Weekly Team Meeting",
-  "frequency": "weekly",
-  "days_of_week": [1, 3, 5],
-  "start_date": "2025-11-01 09:00:00",
-  "end_date": "2025-12-31 09:00:00",
-  "duration": 3600,
-  "location_id": 5
+  "status": "draft",
+  "recurrence": {
+    "frequency": "weekly",
+    "days_of_week": [1, 3, 5],
+    "start_date": "2030-01-01",
+    "end_date": "2030-03-31",
+    "start_time": "09:00:00",
+    "duration": 3600,
+    "interval": 1,
+    "exclude_days": ["2030-01-02"]
+  }
 }
 ```
 
@@ -293,13 +318,35 @@ Request body for monthly recurrence:
 ```json
 {
   "title": "Monthly Board Meeting",
-  "frequency": "monthly",
-  "day_of_month": 15,
-  "start_date": "2025-11-01 14:00:00",
-  "end_date": "2026-11-01 14:00:00",
-  "duration": 7200
+  "status": "draft",
+  "recurrence": {
+    "frequency": "monthly",
+    "day_of_week": "monday",
+    "week_of_month": 2,
+    "start_date": "2030-01-01",
+    "end_date": "2030-03-31",
+    "start_time": "14:00:00",
+    "duration": 7200
+  }
 }
 ```
+
+The legacy flat request form is also accepted. Weekdays accept names or numbers
+1–7 (Monday–Sunday); 0 also means Sunday. Monthly patterns use a weekday and
+week 1–5, or -1 for the last matching weekday. Specific patterns use
+`frequency: "specific"` and a `dates` array. Interval is an integer from 1 to 127.
+
+Duration is elapsed seconds. The response adds `duration_days` for EME's native
+inclusive day count. Nonexistent local times and series whose fixed local times
+cannot preserve that duration across daylight saving return 400 before writing;
+split those series or choose different times. Native EME omits past occurrences
+for weekly/monthly patterns and retains explicitly requested specific dates.
+
+Success requires every planned occurrence to be read back with its requested
+date and times. A failed save returns 500 and invokes native recurrence cleanup;
+saved events move to trash. Native hooks may already have run: this does not
+promise transactional rollback of email or third-party effects. Recurrence
+deletion likewise follows native EME's event, booking and task cleanup policy.
 
 #### Get Recurrence Instances
 

@@ -4,13 +4,13 @@
  * Plugin URI: https://github.com/gserafini/eme-rest-api
  * GitHub Plugin URI: gserafini/eme-rest-api
  * Description: REST API endpoints for Events Made Easy plugin including recurring events support
- * Version: 1.9.2
+ * Version: 1.10.0
  * Author: Gabriel Serafini
  * Author URI: https://gabrielserafini.com
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
- * Requires at least: 5.0
- * Requires PHP: 7.2
+ * Requires at least: 6.0
+ * Requires PHP: 8.1
  * Text Domain: eme-rest-api
  */
 
@@ -66,7 +66,7 @@ add_action(
 				array(
 					'methods'             => 'POST',
 					'callback'            => 'eme_rest_create_event',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_create_permission',
 				),
 			)
 		);
@@ -83,12 +83,12 @@ add_action(
 				array(
 					'methods'             => array( 'POST', 'PUT', 'PATCH' ),
 					'callback'            => 'eme_rest_update_event',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_event_permission',
 				),
 				array(
 					'methods'             => 'DELETE',
 					'callback'            => 'eme_rest_delete_event',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_event_permission',
 				),
 			)
 		);
@@ -159,7 +159,7 @@ add_action(
 				array(
 					'methods'             => 'POST',
 					'callback'            => 'eme_rest_create_recurrence',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_create_permission',
 				),
 			)
 		);
@@ -176,7 +176,7 @@ add_action(
 				array(
 					'methods'             => 'DELETE',
 					'callback'            => 'eme_rest_delete_recurrence',
-					'permission_callback' => 'eme_rest_write_permission',
+					'permission_callback' => 'eme_rest_recurrence_permission',
 				),
 			)
 		);
@@ -199,9 +199,43 @@ function eme_rest_read_permission() {
 	return true;
 }
 
+function eme_rest_read_private_permission() {
+	return current_user_can( 'edit_posts' ) || current_user_can( get_option( 'eme_cap_edit_events' ) );
+}
+
 function eme_rest_write_permission() {
 	// Require authentication and edit_posts capability
 	return current_user_can( 'edit_posts' );
+}
+
+// Event writes follow EME's configured add, author, editor and publish policy.
+function eme_rest_create_permission() {
+	return current_user_can( get_option( 'eme_cap_add_event' ) ) || current_user_can( get_option( 'eme_cap_edit_events' ) );
+}
+
+function eme_rest_can_manage_event( $event ) {
+	return $event && ( current_user_can( get_option( 'eme_cap_edit_events' ) ) ||
+		( current_user_can( get_option( 'eme_cap_author_event' ) ) && get_current_user_id() === (int) $event['event_author'] ) );
+}
+
+function eme_rest_event_permission( $request ) {
+	$event = eme_get_event( (int) $request['id'] );
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
+	}
+	return eme_rest_can_manage_event( $event ) ? true : new WP_Error( 'forbidden', 'EME does not permit editing this event.', array( 'status' => 403 ) );
+}
+
+function eme_rest_recurrence_permission( $request ) {
+	$event = eme_get_event( eme_get_recurrence_first_eventid( (int) $request['id'] ) );
+	if ( ! $event ) {
+		return new WP_Error( 'not_found', 'Recurrence event not found', array( 'status' => 404 ) );
+	}
+	return eme_rest_can_manage_event( $event ) ? true : new WP_Error( 'forbidden', 'EME does not permit deleting this recurrence.', array( 'status' => 403 ) );
+}
+
+function eme_rest_requested_status( $status ) {
+	return current_user_can( get_option( 'eme_cap_publish_event' ) ) ? eme_rest_map_status( $status ) : 5;
 }
 
 // Geocoding function using OpenStreetMap Nominatim (same as EME frontend)
@@ -366,7 +400,7 @@ function eme_rest_get_events( $request ) {
 	}
 
 	// Public API reads follow event visibility even when a caller supplies IDs.
-	if ( ! current_user_can( 'edit_posts' ) ) {
+	if ( ! eme_rest_read_private_permission() ) {
 		$events = array_values(
 			array_filter(
 				$events,
@@ -394,7 +428,7 @@ function eme_rest_get_event( $request ) {
 	// Use EME's built-in function to get event
 	$event = eme_get_event( $event_id );
 
-	if ( ! $event || ( ! current_user_can( 'edit_posts' ) && ! in_array( (int) $event['event_status'], array( 1, 3 ), true ) ) ) {
+	if ( ! $event || ( ! eme_rest_read_private_permission() && ! in_array( (int) $event['event_status'], array( 1, 3 ), true ) ) ) {
 		return new WP_Error( 'not_found', 'Event not found', array( 'status' => 404 ) );
 	}
 
@@ -442,7 +476,7 @@ function eme_rest_create_event( $request ) {
 	}
 
 	// Set event status (defaults to draft if not specified)
-	$event['event_status'] = isset( $params['status'] ) ? eme_rest_map_status( $params['status'] ) : 5;
+	$event['event_status'] = eme_rest_requested_status( $params['status'] ?? 'draft' );
 
 	// Optional fields
 	if ( isset( $params['location_id'] ) ) {
@@ -531,8 +565,8 @@ function eme_rest_update_event( $request ) {
 	if ( isset( $params['end_date'] ) ) {
 		$event['event_end'] = sanitize_text_field( $params['end_date'] );
 	}
-	if ( isset( $params['status'] ) ) {
-		$event['event_status'] = eme_rest_map_status( $params['status'] );
+	if ( isset( $params['status'] ) || ! current_user_can( get_option( 'eme_cap_publish_event' ) ) ) {
+		$event['event_status'] = eme_rest_requested_status( $params['status'] ?? 'draft' );
 	}
 	if ( isset( $params['location_id'] ) ) {
 		$event['location_id'] = intval( $params['location_id'] );
@@ -628,7 +662,7 @@ function eme_rest_change_status( $request ) {
 	}
 
 	// Map status string to EME status code
-	$new_status = eme_rest_map_status( $params['status'] );
+	$new_status = eme_rest_requested_status( $params['status'] );
 
 	// Validate status code (must be 0-6)
 	// Status codes: 0=trash, 1=public, 2=private, 3=unlisted, 5=draft, 6=fs_draft.
@@ -988,7 +1022,7 @@ function eme_rest_get_recurrences( $request ) { // phpcs:ignore Generic.CodeAnal
         (SELECT recurrence_id, MIN(event_id) AS event_id FROM {$wpdb->prefix}eme_events
          WHERE recurrence_id > 0 AND (%d = 1 OR event_status = 1) GROUP BY recurrence_id) patterns
         ON patterns.event_id = e.event_id ORDER BY e.event_start DESC",
-			current_user_can( 'edit_posts' ) ? 1 : 0
+			eme_rest_read_private_permission() ? 1 : 0
 		),
 		ARRAY_A
 	);
@@ -998,101 +1032,183 @@ function eme_rest_get_recurrences( $request ) { // phpcs:ignore Generic.CodeAnal
 
 function eme_rest_create_recurrence( $request ) {
 	$params = $request->get_json_params();
-
-	// Validate required fields
-	if ( empty( $params['title'] ) ) {
+	$title  = isset( $params['title'] ) ? sanitize_text_field( $params['title'] ) : '';
+	if ( '' === $title ) {
 		return new WP_Error( 'missing_title', 'Event title is required', array( 'status' => 400 ) );
 	}
-	if ( empty( $params['recurrence'] ) ) {
-		return new WP_Error( 'missing_recurrence', 'Recurrence pattern is required', array( 'status' => 400 ) );
+	if ( strlen( $title ) > 65535 ) {
+		return new WP_Error( 'invalid_title', 'Event title must fit the native TEXT limit of 65535 bytes', array( 'status' => 400 ) );
 	}
-
-	$recurrence = $params['recurrence'];
-
-	// Validate recurrence pattern
-	$validation = eme_rest_validate_recurrence( $recurrence );
-	if ( is_wp_error( $validation ) ) {
-		return $validation;
+	$engine = eme_new_recurrence();
+	if ( ! array_key_exists( 'specific_days', $engine ) || ! array_key_exists( 'exclude_days', $engine ) || ! defined( 'EME_VERSION' ) || version_compare( EME_VERSION, '3.2.26', '<' ) || ! defined( 'EME_DB_VERSION' ) || (int) get_option( 'eme_version' ) !== (int) EME_DB_VERSION ) {
+		return new WP_Error( 'eme_upgrade_required', 'Upgrade and qualify Events Made Easy 3.2.26 or newer with its matching database schema before creating recurrences.', array( 'status' => 409 ) );
 	}
-
-	// Parse recurrence data
-	$recurrence_data = eme_rest_parse_recurrence( $recurrence );
-
-	// Create recurrence pattern
-	global $wpdb;
-	$recurrence_table = $wpdb->prefix . 'eme_recurrence';
-
-	$result = $wpdb->insert( $recurrence_table, $recurrence_data );
-
-	if ( ! $result ) {
-		return new WP_Error( 'creation_failed', 'Failed to create recurrence pattern', array( 'status' => 500 ) );
+	// Retain the nested API and accept the flat form documented by older releases.
+	$pattern = isset( $params['recurrence'] ) ? $params['recurrence'] : $params;
+	if ( ! is_array( $pattern ) ) {
+		return new WP_Error( 'invalid_recurrence', 'Recurrence must be an object', array( 'status' => 400 ) );
 	}
-
-	$recurrence_id = $wpdb->insert_id;
-
-	// Create event with recurrence_id
+	$valid = eme_rest_validate_recurrence( $pattern );
+	if ( is_wp_error( $valid ) ) {
+		return $valid;
+	}
+	try {
+		$recurrence  = eme_rest_parse_recurrence( $pattern );
+		$date        = $recurrence['recurrence_start_date'];
+		$start_input = isset( $pattern['start_date'] ) ? $pattern['start_date'] : $date;
+		// A bound's date may never occur in the pattern. Validate its clock in
+		// UTC first, without assigning an unused DST gap/fold to an actual event.
+		$clock = eme_rest_datetime( $start_input, 'UTC' )->format( 'H:i:s' );
+		if ( isset( $pattern['start_time'] ) ) {
+			$clock = eme_rest_datetime( $date . ' ' . $pattern['start_time'], 'UTC' )->format( 'H:i:s' );
+		} elseif ( isset( $params['start_time'] ) ) {
+			$clock = eme_rest_datetime( $date . ' ' . $params['start_time'], 'UTC' )->format( 'H:i:s' );
+		}
+		global $eme_timezone;
+		$timezone = new DateTimeZone( defined( 'EME_TIMEZONE' ) ? EME_TIMEZONE : ( $eme_timezone ? $eme_timezone : 'UTC' ) );
+		$now      = new DateTimeImmutable( 'now', $timezone );
+		$start    = null;
+		foreach ( eme_get_recurrence_days( $recurrence ) as $day ) {
+			$input = $day . ' ' . $clock;
+			if ( 'specific' !== $recurrence['recurrence_freq'] && new DateTimeImmutable( $input, $timezone ) < $now ) {
+				continue;
+			}
+			$start = eme_rest_datetime( $input );
+			break;
+		}
+		if ( null === $start ) {
+			throw new InvalidArgumentException( 'No recurring events match the requested future date range' );
+		}
+		$seconds = isset( $pattern['duration'] ) ? (int) $pattern['duration'] : 3600;
+		if ( $seconds < 1 ) {
+			throw new InvalidArgumentException( 'Duration must be positive seconds' );
+		}
+		list( $end, $duration_days ) = eme_rest_recurrence_times( $recurrence, $start, $seconds );
+		// Native EME stores inclusive calendar days; the REST API accepts seconds.
+		$recurrence['event_duration'] = $duration_days;
+	} catch ( Exception $failure ) {
+		return new WP_Error( 'invalid_recurrence', $failure->getMessage(), array( 'status' => 400 ) );
+	}
 	$event                     = eme_new_event();
 	$event['event_properties'] = eme_init_event_props( array(), 1 );
-
-	// Set event details
-	$event['event_name']  = sanitize_text_field( $params['title'] );
-	$event['event_notes'] = isset( $params['description'] ) ? wp_kses_post( $params['description'] ) : '';
-	// Set event status (defaults to draft if not specified)
-	$event['event_status']  = isset( $params['status'] ) ? eme_rest_map_status( $params['status'] ) : 5;
-	$event['event_author']  = get_current_user_id();
-	$event['recurrence_id'] = $recurrence_id;
-
-	// Optional fields
-	if ( isset( $params['location_id'] ) ) {
-		$event['location_id'] = intval( $params['location_id'] );
+	$event['event_name']       = $title;
+	$event['event_notes']      = isset( $params['description'] ) ? wp_kses_post( $params['description'] ) : '';
+	$event['event_status']     = eme_rest_requested_status( $params['status'] ?? 'draft' );
+	$event['event_author']     = get_current_user_id();
+	$event['event_start']      = $start->format( 'Y-m-d H:i:s' );
+	$event['event_end']        = $end->format( 'Y-m-d H:i:s' );
+	foreach ( array(
+		'location_id'       => 'location_id',
+		'seats'             => 'event_seats',
+		'image_id'          => 'event_image_id',
+		'contact_person_id' => 'event_contactperson_id',
+	) as $input => $field ) {
+		if ( isset( $params[ $input ] ) ) {
+			$event[ $field ] = (int) $params[ $input ];
+		}
 	}
 	if ( isset( $params['category_ids'] ) ) {
-		$event['event_category_ids'] = is_array( $params['category_ids'] )
-			? implode( ',', array_map( 'intval', $params['category_ids'] ) )
-			: sanitize_text_field( $params['category_ids'] );
+		$event['event_category_ids'] = is_array( $params['category_ids'] ) ? implode( ',', array_map( 'intval', $params['category_ids'] ) ) : sanitize_text_field( $params['category_ids'] );
+	}
+	foreach ( array( 'price', 'currency' ) as $field ) {
+		if ( isset( $params[ $field ] ) ) {
+			$event[ $field ] = sanitize_text_field( $params[ $field ] );
+		}
 	}
 	if ( isset( $params['rsvp'] ) ) {
-		$event['event_rsvp'] = (bool) $params['rsvp'] ? 1 : 0;
+		$event['event_rsvp'] = $params['rsvp'] ? 1 : 0;
 	}
-	if ( isset( $params['seats'] ) ) {
-		$event['event_seats'] = intval( $params['seats'] );
-	}
-	if ( isset( $params['price'] ) ) {
-		$event['price'] = sanitize_text_field( $params['price'] );
-	}
-	if ( isset( $params['currency'] ) ) {
-		$event['currency'] = sanitize_text_field( $params['currency'] );
-	}
-	if ( isset( $params['image_id'] ) ) {
-		$event['event_image_id']  = intval( $params['image_id'] );
+	if ( ! empty( $event['event_image_id'] ) ) {
 		$event['event_image_url'] = wp_get_attachment_url( $event['event_image_id'] );
 	}
-
-	// Insert event
-	$event_id = eme_db_insert_event( $event );
-
-	if ( ! $event_id ) {
-		// Rollback: delete recurrence
-		$wpdb->delete( $recurrence_table, array( 'recurrence_id' => $recurrence_id ) );
-		return new WP_Error( 'creation_failed', 'Failed to create recurring event', array( 'status' => 500 ) );
+	if ( isset( $params['url'] ) ) {
+		$event['event_url'] = esc_url_raw( $params['url'] );
 	}
-
+	// Let EME generate weekly/monthly/specific occurrences, interval/exclusion
+	// handling, native hooks and linked records together.
+	$planned = array();
+	$now     = new DateTimeImmutable( 'now', $start->getTimezone() );
+	foreach ( eme_get_recurrence_days( $recurrence ) as $day ) {
+		$input = $day . ' ' . $start->format( 'H:i:s' );
+		if ( 'specific' !== $recurrence['recurrence_freq'] && new DateTimeImmutable( $input, $start->getTimezone() ) < $now ) {
+			continue;
+		}
+		$occurrence_start = eme_rest_datetime( $input );
+		$planned[]        = array(
+			'event_start' => $occurrence_start->format( 'Y-m-d H:i:s' ),
+			'event_end'   => $occurrence_start->modify( '+' . ( $recurrence['event_duration'] - 1 ) . ' days' )->format( 'Y-m-d' ) . ' ' . $end->format( 'H:i:s' ),
+		);
+	}
+	if ( empty( $planned ) ) {
+		return new WP_Error( 'creation_failed', 'No recurring events were created; check the date range', array( 'status' => 400 ) );
+	}
+	// EME otherwise continues with recurrence_id=0 after a failed pattern INSERT,
+	// creating orphan single events. The transient identity is discarded by EME's
+	// native event-column intersection and leaves unrelated hook-created events alone.
+	$guard_identity                  = new stdClass();
+	$event['_eme_rest_native_guard'] = $guard_identity;
+	$missing_pattern                 = new RuntimeException( 'Native recurrence storage failed' );
+	$guard                           = static function ( $candidate ) use ( $guard_identity, $missing_pattern ) {
+		if ( isset( $candidate['_eme_rest_native_guard'] ) && $candidate['_eme_rest_native_guard'] === $guard_identity && empty( $candidate['recurrence_id'] ) ) {
+			throw $missing_pattern;
+		}
+		return $candidate;
+	};
+	add_filter( 'eme_event_preinsert_filter', $guard, PHP_INT_MIN );
+	try {
+		$id = eme_db_insert_recurrence( $recurrence, $event );
+	} catch ( RuntimeException $failure ) {
+		if ( $failure !== $missing_pattern ) {
+			throw $failure;
+		}
+		return new WP_Error( 'creation_failed', 'Native EME could not store the recurrence. No recurring events were created.', array( 'status' => 500 ) );
+	} finally {
+		remove_filter( 'eme_event_preinsert_filter', $guard, PHP_INT_MIN );
+	}
+	if ( ! $id ) {
+		return new WP_Error( 'creation_failed', 'Native EME could not store the planned recurring events.', array( 'status' => 500 ) );
+	}
+	global $wpdb;
+	$saved  = $wpdb->get_results( $wpdb->prepare( "SELECT event_id,event_start,event_end FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d ORDER BY event_start,event_id", $id ), ARRAY_A );
+	$actual = array();
+	foreach ( is_array( $saved ) ? $saved : array() as $row ) {
+		$actual[] = array(
+			'event_start' => $row['event_start'],
+			'event_end'   => $row['event_end'],
+		);
+	}
+	// Native EME counts attempted inserts, including failed ones. Its return ID
+	// alone does not prove that every requested occurrence reached the database.
+	if ( $actual !== $planned ) {
+		eme_db_delete_recurrence( $id );
+		$clean = 0 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}eme_recurrence WHERE recurrence_id=%d", $id ) );
+		foreach ( is_array( $saved ) ? $saved : array() as $row ) {
+			$clean = $clean && 1 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}eme_events WHERE event_id=%d AND event_status=0 AND recurrence_id=0", $row['event_id'] ) );
+		}
+		if ( ! $clean ) {
+			return new WP_Error( 'creation_cleanup_failed', 'Native EME did not save every planned occurrence and cleanup could not be verified. Inspect the recurrence and event trash before retrying.', array( 'status' => 500 ) );
+		}
+		return new WP_Error( 'creation_failed', 'Native EME did not save every planned occurrence. The incomplete recurrence was removed and saved events were moved to trash.', array( 'status' => 500 ) );
+	}
+	$recurrence = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}eme_recurrence WHERE recurrence_id=%d", $id ), ARRAY_A );
+	$first      = (int) $wpdb->get_var( $wpdb->prepare( "SELECT MIN(event_id) FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d", $id ) );
 	return rest_ensure_response(
 		array(
 			'success'            => true,
-			'event_id'           => $event_id,
-			'recurrence_id'      => $recurrence_id,
-			'recurrence_pattern' => eme_rest_format_recurrence( array_merge( $recurrence_data, array( 'recurrence_id' => $recurrence_id ) ) ),
-			'message'            => 'Recurring event created successfully',
+			'event_id'           => $first,
+			'recurrence_id'      => $id,
+			'recurrence_pattern' => eme_rest_format_recurrence( $recurrence ),
+			'message'            => 'Recurring events created successfully',
 		)
 	);
 }
+
 
 function eme_rest_get_recurrence( $request ) {
 	global $wpdb;
 	$id         = (int) $request['id'];
 	$recurrence = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}eme_recurrence WHERE recurrence_id=%d", $id ), ARRAY_A );
-	if ( ! $recurrence || ( ! current_user_can( 'edit_posts' ) && ! (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d AND event_status IN (1,3)", $id ) ) ) ) {
+	if ( ! $recurrence || ( ! eme_rest_read_private_permission() && ! (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d AND event_status IN (1,3)", $id ) ) ) ) {
 		return new WP_Error( 'not_found', 'Recurrence pattern not found', array( 'status' => 404 ) );
 	}
 	return rest_ensure_response( eme_rest_format_recurrence( $recurrence ) );
@@ -1115,17 +1231,15 @@ function eme_rest_delete_recurrence( $request ) {
 		return new WP_Error( 'not_found', 'Recurrence pattern not found', array( 'status' => 404 ) );
 	}
 
-	// Delete associated events
-	$events_table = $wpdb->prefix . 'eme_events';
-	$wpdb->delete( $events_table, array( 'recurrence_id' => $recurrence_id ) );
-
-	// Delete recurrence
-	$wpdb->delete( $recurrence_table, array( 'recurrence_id' => $recurrence_id ) );
+	// Use EME's lifecycle hooks and its native event/booking/task cleanup policy.
+	if ( ! eme_db_delete_recurrence( $recurrence_id ) ) {
+		return new WP_Error( 'deletion_failed', 'EME could not remove the recurrence; inspect its logs before retrying.', array( 'status' => 500 ) );
+	}
 
 	return rest_ensure_response(
 		array(
 			'success' => true,
-			'message' => 'Recurrence pattern and associated events deleted successfully',
+			'message' => 'Recurrence removed and associated events moved to trash',
 		)
 	);
 }
@@ -1155,7 +1269,7 @@ function eme_rest_get_recurrence_instances( $request ) {
 			(int) $request['id'],
 			$start->setTime( 0, 0 )->format( 'Y-m-d H:i:s' ),
 			$end->setTime( 23, 59, 59 )->format( 'Y-m-d H:i:s' ),
-			current_user_can( 'edit_posts' ) ? 1 : 0
+			eme_rest_read_private_permission() ? 1 : 0
 		),
 		ARRAY_A
 	);
@@ -1187,8 +1301,8 @@ function eme_rest_validate_recurrence( $recurrence ) {
 	}
 
 	// Validate interval
-	if ( isset( $recurrence['interval'] ) && $recurrence['interval'] < 1 ) {
-		return new WP_Error( 'invalid_interval', 'Interval must be >= 1', array( 'status' => 400 ) );
+	if ( isset( $recurrence['interval'] ) && ( ! is_numeric( $recurrence['interval'] ) || floor( (float) $recurrence['interval'] ) !== (float) $recurrence['interval'] || 1 > $recurrence['interval'] || 127 < $recurrence['interval'] ) ) {
+		return new WP_Error( 'invalid_interval', 'Interval must be an integer from 1 to 127', array( 'status' => 400 ) );
 	}
 
 	// Validate weekly pattern
@@ -1200,7 +1314,7 @@ function eme_rest_validate_recurrence( $recurrence ) {
 
 	// Validate monthly pattern.
 	if ( 'monthly' === $recurrence['frequency'] ) {
-		if ( empty( $recurrence['day_of_week'] ) || ! isset( $recurrence['week_of_month'] ) ) {
+		if ( ! isset( $recurrence['day_of_week'] ) || '' === (string) $recurrence['day_of_week'] || ! isset( $recurrence['week_of_month'] ) ) {
 			return new WP_Error( 'missing_monthly_pattern', 'Day of week and week of month are required', array( 'status' => 400 ) );
 		}
 	}
@@ -1215,114 +1329,122 @@ function eme_rest_validate_recurrence( $recurrence ) {
 	return true;
 }
 
-function eme_rest_parse_recurrence( $recurrence ) {
-	$data = array(
-		'recurrence_freq'     => $recurrence['frequency'],
-		'recurrence_interval' => isset( $recurrence['interval'] ) ? intval( $recurrence['interval'] ) : 1,
+
+function eme_rest_parse_recurrence( $pattern ) {
+	$data                        = eme_new_recurrence();
+	$data['recurrence_freq']     = $pattern['frequency'];
+	$data['recurrence_interval'] = isset( $pattern['interval'] ) ? (int) $pattern['interval'] : 1;
+	$days                        = array(
+		'sunday'    => 7,
+		'monday'    => 1,
+		'tuesday'   => 2,
+		'wednesday' => 3,
+		'thursday'  => 4,
+		'friday'    => 5,
+		'saturday'  => 6,
 	);
-
-	// Parse based on frequency type
-	if ( 'weekly' === $recurrence['frequency'] ) {
-		$data['recurrence_start_date'] = sanitize_text_field( $recurrence['start_date'] );
-		$data['recurrence_end_date']   = sanitize_text_field( $recurrence['end_date'] );
-
-		// Convert day names to day codes (0=Sun, 1=Mon, etc.)
-		$day_map = array(
-			'sunday'    => 0,
-			'monday'    => 1,
-			'tuesday'   => 2,
-			'wednesday' => 3,
-			'thursday'  => 4,
-			'friday'    => 5,
-			'saturday'  => 6,
+	if ( 'specific' === $pattern['frequency'] ) {
+		$dates = is_array( $pattern['dates'] ) ? $pattern['dates'] : explode( ',', $pattern['dates'] );
+		$dates = array_map(
+			function ( $date ) {
+				return eme_rest_datetime( $date, 'UTC' )->format( 'Y-m-d' );
+			},
+			$dates
 		);
-
-		$days      = is_array( $recurrence['days_of_week'] ) ? $recurrence['days_of_week'] : explode( ',', $recurrence['days_of_week'] );
-		$day_codes = array();
-		foreach ( $days as $day ) {
-			$day = strtolower( trim( $day ) );
-			if ( isset( $day_map[ $day ] ) ) {
-				$day_codes[] = $day_map[ $day ];
+		sort( $dates );
+		$data['specific_days']         = implode( ',', array_unique( $dates ) );
+		$data['recurrence_start_date'] = reset( $dates );
+		$data['recurrence_end_date']   = end( $dates );
+	} else {
+		$data['recurrence_start_date'] = eme_rest_datetime( $pattern['start_date'], 'UTC' )->format( 'Y-m-d' );
+		$data['recurrence_end_date']   = eme_rest_datetime( $pattern['end_date'], 'UTC' )->format( 'Y-m-d' );
+		if ( $data['recurrence_end_date'] < $data['recurrence_start_date'] ) {
+			throw new InvalidArgumentException( 'End date must not precede start date' );
+		}
+	}
+	if ( 'weekly' === $pattern['frequency'] ) {
+		$requested = is_array( $pattern['days_of_week'] ) ? $pattern['days_of_week'] : explode( ',', $pattern['days_of_week'] );
+		$codes     = array();
+		foreach ( $requested as $day ) {
+			$day = strtolower( trim( (string) $day ) );
+			if ( isset( $days[ $day ] ) ) {
+				$codes[] = $days[ $day ];
+			} elseif ( preg_match( '/^[0-7]$/', $day ) ) {
+				$codes[] = '0' === $day ? 7 : (int) $day;
+			} else {
+				throw new InvalidArgumentException( 'Invalid day of week' );
 			}
 		}
-		$data['recurrence_byday'] = implode( ',', $day_codes );
-
-		// Duration and start time
-		$data['event_duration'] = isset( $recurrence['duration'] ) ? intval( $recurrence['duration'] ) : 3600;
-
-	} elseif ( 'monthly' === $recurrence['frequency'] ) {
-		$data['recurrence_start_date'] = sanitize_text_field( $recurrence['start_date'] );
-		$data['recurrence_end_date']   = sanitize_text_field( $recurrence['end_date'] );
-
-		// Week of month (1-5, or -1 for last)
-		$data['recurrence_byweekno'] = intval( $recurrence['week_of_month'] );
-
-		// Day of week
-		$day_map                  = array(
-			'sunday'    => 0,
-			'monday'    => 1,
-			'tuesday'   => 2,
-			'wednesday' => 3,
-			'thursday'  => 4,
-			'friday'    => 5,
-			'saturday'  => 6,
+		$data['recurrence_byday'] = implode( ',', array_unique( $codes ) );
+	} elseif ( 'monthly' === $pattern['frequency'] ) {
+		$day = strtolower( trim( (string) $pattern['day_of_week'] ) );
+		if ( ! isset( $days[ $day ] ) && ! preg_match( '/^[0-7]$/', $day ) ) {
+			throw new InvalidArgumentException( 'Invalid day of week' );
+		}
+		$week = (int) $pattern['week_of_month'];
+		if ( ! in_array( $week, array( -1, 1, 2, 3, 4, 5 ), true ) ) {
+			throw new InvalidArgumentException( 'Week of month must be 1-5 or -1 for last' );
+		}
+		$data['recurrence_byday']    = isset( $days[ $day ] ) ? $days[ $day ] : ( '0' === $day ? 7 : (int) $day );
+		$data['recurrence_byweekno'] = $week;
+	}
+	if ( isset( $pattern['exclude_days'] ) ) {
+		$exclude              = is_array( $pattern['exclude_days'] ) ? $pattern['exclude_days'] : explode( ',', $pattern['exclude_days'] );
+		$data['exclude_days'] = implode(
+			',',
+			array_map(
+				function ( $date ) {
+					return eme_rest_datetime( $date, 'UTC' )->format( 'Y-m-d' );
+				},
+				$exclude
+			)
 		);
-		$day                      = strtolower( trim( $recurrence['day_of_week'] ) );
-		$data['recurrence_byday'] = isset( $day_map[ $day ] ) ? $day_map[ $day ] : 1;
-
-		$data['event_duration'] = isset( $recurrence['duration'] ) ? intval( $recurrence['duration'] ) : 3600;
-
-	} elseif ( 'specific' === $recurrence['frequency'] ) {
-		// Specific dates
-		$dates                 = is_array( $recurrence['dates'] ) ? $recurrence['dates'] : explode( ',', $recurrence['dates'] );
-		$data['specific_days'] = implode( ',', array_map( 'sanitize_text_field', $dates ) );
-
-		$data['event_duration'] = isset( $recurrence['duration'] ) ? intval( $recurrence['duration'] ) : 3600;
 	}
-
-	// Exclude days (optional)
-	if ( isset( $recurrence['exclude_days'] ) ) {
-		$exclude              = is_array( $recurrence['exclude_days'] ) ? $recurrence['exclude_days'] : explode( ',', $recurrence['exclude_days'] );
-		$data['exclude_days'] = implode( ',', array_map( 'sanitize_text_field', $exclude ) );
-	}
-
 	return $data;
 }
 
-function eme_rest_format_recurrence( $recurrence ) {
-	$formatted = array(
-		'id'        => intval( $recurrence['recurrence_id'] ),
-		'frequency' => $recurrence['recurrence_freq'],
-		'interval'  => intval( $recurrence['recurrence_interval'] ),
-		'duration'  => intval( $recurrence['event_duration'] ),
-	);
 
-	if ( isset( $recurrence['recurrence_start_date'] ) ) {
-		$formatted['start_date'] = $recurrence['recurrence_start_date'];
+function eme_rest_format_recurrence( $recurrence ) {
+	global $wpdb;
+	$id        = (int) $recurrence['recurrence_id'];
+	$event     = $wpdb->get_row( $wpdb->prepare( "SELECT event_start,event_end FROM {$wpdb->prefix}eme_events WHERE recurrence_id=%d AND (%d=1 OR event_status IN (1,3)) ORDER BY event_start,event_id LIMIT 1", $id, eme_rest_read_private_permission() ? 1 : 0 ), ARRAY_A );
+	$seconds   = $event ? eme_rest_datetime( $event['event_end'] )->getTimestamp() - eme_rest_datetime( $event['event_start'] )->getTimestamp() : 0;
+	$formatted = array(
+		'id'            => $id,
+		'frequency'     => $recurrence['recurrence_freq'],
+		'interval'      => (int) $recurrence['recurrence_interval'],
+		'duration'      => $seconds,
+		'duration_days' => (int) $recurrence['event_duration'],
+	);
+	if ( ! eme_rest_read_private_permission() ) {
+		// Pattern rules and bounds can reveal private/draft occurrence dates.
+		// Public clients obtain only visible dates through the instances endpoint.
+		return array_intersect_key( $formatted, array_flip( array( 'id', 'duration', 'duration_days' ) ) );
 	}
-	if ( isset( $recurrence['recurrence_end_date'] ) ) {
-		$formatted['end_date'] = $recurrence['recurrence_end_date'];
+	foreach ( array(
+		'recurrence_start_date' => 'start_date',
+		'recurrence_end_date'   => 'end_date',
+		'recurrence_byday'      => 'days_of_week_codes',
+		'recurrence_byweekno'   => 'week_of_month',
+	) as $key => $field ) {
+		if ( isset( $recurrence[ $key ] ) ) {
+			$formatted[ $field ] = 'week_of_month' === $field ? (int) $recurrence[ $key ] : $recurrence[ $key ];
+		}
 	}
-	if ( isset( $recurrence['recurrence_byday'] ) ) {
-		$formatted['days_of_week_codes'] = $recurrence['recurrence_byday'];
-	}
-	if ( isset( $recurrence['recurrence_byweekno'] ) ) {
-		$formatted['week_of_month'] = intval( $recurrence['recurrence_byweekno'] );
-	}
-	if ( isset( $recurrence['specific_days'] ) ) {
+	if ( ! empty( $recurrence['specific_days'] ) ) {
 		$formatted['specific_dates'] = explode( ',', $recurrence['specific_days'] );
 	}
-	if ( isset( $recurrence['exclude_days'] ) ) {
+	if ( ! empty( $recurrence['exclude_days'] ) ) {
 		$formatted['excluded_dates'] = explode( ',', $recurrence['exclude_days'] );
 	}
-
 	return $formatted;
 }
 
-// phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- $start_date/$end_date reserved for future date range filtering.
+
+
 function eme_rest_calculate_instances( $recurrence, $start_date, $end_date ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed -- Retained legacy helper signature; API now reads stored occurrences.
-	// Simple instance calculation (basic implementation).
-	// For production, use EME's built-in calculation functions.
+	// Deprecated compatibility helper only. REST endpoints must read actual
+	// stored occurrences and must not call this older recurrence calculator.
 
 	$instances = array();
 	$freq      = $recurrence['recurrence_freq'];
@@ -1358,16 +1480,44 @@ function eme_rest_calculate_instances( $recurrence, $start_date, $end_date ) { /
 	return $instances;
 }
 
-function eme_rest_datetime( $input ) {
+// Dates use the EME site's timezone unless an internal calendar/clock parse
+// explicitly requests UTC. Reject relative or normalized invalid inputs.
+function eme_rest_datetime( $input, $timezone = null ) {
 	$input = trim( (string) $input );
 	if ( ! preg_match( '/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/', $input ) ) {
 		throw new InvalidArgumentException( 'Use an ISO date or local date/time' );
 	}
 	global $eme_timezone;
-	$zone = new DateTimeZone( defined( 'EME_TIMEZONE' ) ? EME_TIMEZONE : ( $eme_timezone ? $eme_timezone : 'UTC' ) );
-	$date = new DateTimeImmutable( $input, $zone );
-	if ( $date->format( 'Y-m-d' ) !== substr( $input, 0, 10 ) ) {
-		throw new InvalidArgumentException( 'Invalid calendar date' );
+	$zone       = new DateTimeZone( null !== $timezone ? $timezone : ( defined( 'EME_TIMEZONE' ) ? EME_TIMEZONE : ( $eme_timezone ? $eme_timezone : 'UTC' ) ) );
+	$date       = new DateTimeImmutable( $input, $zone );
+	$normalized = str_replace( 'T', ' ', $input );
+	$format     = strlen( $normalized ) === 10 ? 'Y-m-d' : ( strlen( $normalized ) === 16 ? 'Y-m-d H:i' : 'Y-m-d H:i:s' );
+	if ( $date->format( $format ) !== $normalized ) {
+		throw new InvalidArgumentException( 'Invalid calendar date or nonexistent local time' );
 	}
 	return $date;
+}
+
+function eme_rest_recurrence_times( $recurrence, $start, $seconds ) {
+	// Adding wall-clock seconds can silently double an elapsed hour at the fall
+	// transition. Native EME stores local datetimes without UTC offsets instead.
+	$end           = $start->setTimestamp( $start->getTimestamp() + $seconds );
+	$duration_days = (int) $start->setTime( 0, 0 )->diff( $end->setTime( 0, 0 ) )->days + 1;
+	if ( eme_rest_datetime( $end->format( 'Y-m-d H:i:s' ) )->getTimestamp() !== $end->getTimestamp() ) {
+		throw new InvalidArgumentException( 'This elapsed duration cannot be represented by native local times across daylight saving. Split the pattern or choose different times.' );
+	}
+	$now = new DateTimeImmutable( 'now', $start->getTimezone() );
+	foreach ( eme_get_recurrence_days( $recurrence ) as $day ) {
+		$input = $day . ' ' . $start->format( 'H:i:s' );
+		if ( 'specific' !== $recurrence['recurrence_freq'] && new DateTimeImmutable( $input, $start->getTimezone() ) < $now ) {
+			continue;
+		}
+		$occurrence_start = eme_rest_datetime( $input );
+		$end_day          = $occurrence_start->modify( '+' . ( $duration_days - 1 ) . ' days' )->format( 'Y-m-d' );
+		$occurrence_end   = eme_rest_datetime( $end_day . ' ' . $end->format( 'H:i:s' ) );
+		if ( $occurrence_end->getTimestamp() - $occurrence_start->getTimestamp() !== $seconds ) {
+			throw new InvalidArgumentException( 'The requested seconds vary across this native local-time pattern. Split the pattern around daylight saving or choose different times.' );
+		}
+	}
+	return array( $end, $duration_days );
 }
